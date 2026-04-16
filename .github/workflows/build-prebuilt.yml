@@ -1,0 +1,124 @@
+name: Build Prebuilt Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      zvec_ref:
+        description: 'zvec git ref to build (branch, tag, or commit)'
+        required: false
+        default: 'main'
+        type: string
+  workflow_call:
+    inputs:
+      zvec_ref:
+        description: 'zvec git ref to build'
+        required: false
+        default: 'main'
+        type: string
+    outputs:
+      artifact_prefix:
+        description: 'Prefix used for uploaded artifacts'
+        value: 'zvec-prebuilt'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-15
+            lib_name: libzvec_c_api.dylib
+          - target: x86_64-apple-darwin
+            os: macos-13
+            lib_name: libzvec_c_api.dylib
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+            lib_name: libzvec_c_api.so
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            lib_name: libzvec_c_api.so
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            lib_name: zvec_c_api.dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        if: runner.os != 'Windows'
+        with:
+          python-version: '3.10'
+
+      - name: Clone zvec
+        run: |
+          git clone --depth 1 --branch ${{ inputs.zvec_ref || 'main' }} \
+            https://github.com/alibaba/zvec.git ../zvec
+        shell: bash
+
+      - name: Build zvec C library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd ../zvec
+
+          if [[ "${{ matrix.target }}" == *apple* ]]; then
+            NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+          else
+            NPROC=$(nproc 2>/dev/null || echo 2)
+          fi
+
+          python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
+
+          CMAKE_GENERATOR="Unix Makefiles" \
+          CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" \
+          python -m pip install -v . \
+            --no-build-isolation \
+            --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      - name: Build zvec C library (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd ../zvec
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
+          cmake --build . --config Release --parallel
+        shell: bash
+
+      - name: Package library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          ZVEC_LIB_DIR="$(find ../zvec/build -name '${{ matrix.lib_name }}' -exec dirname {} \; | head -1)"
+          cp "$ZVEC_LIB_DIR/${{ matrix.lib_name }}" dist/
+          # Also copy any symlinks or versioned libraries
+          find "$ZVEC_LIB_DIR" -name 'libzvec_c_api*' -exec cp -P {} dist/ \; 2>/dev/null || true
+          echo "${{ matrix.target }}" > dist/TARGET
+          tar czf zvec-prebuilt-${{ matrix.target }}.tar.gz -C dist .
+          ls -lh zvec-prebuilt-${{ matrix.target }}.tar.gz
+        shell: bash
+
+      - name: Package library (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p dist
+          # Find the DLL and import lib
+          find ../zvec/build -name 'zvec_c_api.dll' -exec cp {} dist/ \; 2>/dev/null || true
+          find ../zvec/build -name 'zvec_c_api.lib' -exec cp {} dist/ \; 2>/dev/null || true
+          find ../zvec/build -name 'zvec_c_api.dll' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
+          find ../zvec/build -name 'zvec_c_api.lib' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
+          echo "${{ matrix.target }}" > dist/TARGET
+          tar czf zvec-prebuilt-${{ matrix.target }}.tar.gz -C dist .
+          ls -lh zvec-prebuilt-${{ matrix.target }}.tar.gz
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zvec-prebuilt-${{ matrix.target }}
+          path: zvec-prebuilt-${{ matrix.target }}.tar.gz
+          retention-days: 7

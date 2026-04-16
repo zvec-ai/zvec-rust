@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Step 1: Build prebuilt libraries for all platforms
+  build-prebuilt:
+    name: Build Prebuilt Libraries
+    uses: ./.github/workflows/build-prebuilt.yml
+    with:
+      zvec_ref: main
+
+  # Step 2: Create release and upload prebuilt libraries
+  release:
+    name: Create Release
+    needs: build-prebuilt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify Cargo.toml versions match tag
+        run: |
+          SYS_VERSION=$(grep '^version' zvec-sys/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          SDK_VERSION=$(grep '^version' zvec/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "$SYS_VERSION" != "$TAG_VERSION" ] || [ "$SDK_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch!"
+            echo "  Tag: $TAG_VERSION"
+            echo "  zvec-sys: $SYS_VERSION"
+            echo "  zvec: $SDK_VERSION"
+            exit 1
+          fi
+          echo "All versions match: $TAG_VERSION"
+        shell: bash
+
+      - name: Download all prebuilt artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: zvec-prebuilt-*
+          path: prebuilt-artifacts/
+          merge-multiple: false
+
+      - name: List prebuilt artifacts
+        run: find prebuilt-artifacts/ -type f -name '*.tar.gz' | sort
+        shell: bash
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+          files: prebuilt-artifacts/**/*.tar.gz
+
+      - name: Publish to crates.io
+        run: |
+          # Wait a moment for the release assets to be available
+          sleep 10
+
+          # First publish zvec-sys (no dependencies)
+          cd zvec-sys
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+          # Wait for crates.io to index zvec-sys
+          sleep 30
+
+          # Then publish zvec (depends on zvec-sys)
+          cd ../zvec
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+        continue-on-error: true
+        shell: bash

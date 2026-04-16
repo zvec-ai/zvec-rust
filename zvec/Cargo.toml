@@ -1,0 +1,43 @@
+[package]
+name = "zvec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Safe Rust bindings for the zvec vector database"
+readme = "../README.md"
+keywords = ["vector-database", "zvec", "similarity-search", "embeddings", "hnsw"]
+categories = ["database", "api-bindings"]
+
+[dependencies]
+zvec-sys = { path = "../zvec-sys" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
+rand = "0.8"
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "schema_builder"
+path = "examples/schema_builder.rs"
+
+[[example]]
+name = "vector_search"
+path = "examples/vector_search.rs"
+
+[[example]]
+name = "crud_operations"
+path = "examples/crud_operations.rs"
+
+[[example]]
+name = "config_logging"
+path = "examples/config_logging.rs"
+
+[[bench]]
+name = "zvec_bench"
+harness = false

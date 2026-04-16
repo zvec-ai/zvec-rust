@@ -1,0 +1,44 @@
+[package]
+name = "zvec-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+zvec = { path = "../zvec" }
+zvec-sys = { path = "../zvec-sys" }
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "fuzz_types"
+path = "fuzz_targets/fuzz_types.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_schema"
+path = "fuzz_targets/fuzz_schema.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_doc"
+path = "fuzz_targets/fuzz_doc.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_query"
+path = "fuzz_targets/fuzz_query.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_collection"
+path = "fuzz_targets/fuzz_collection.rs"
+test = false
+doc = false

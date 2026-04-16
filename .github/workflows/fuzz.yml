@@ -1,0 +1,88 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: 'Seconds to run each fuzz target'
+        required: false
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.target }} / ${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux-x64
+          - linux-arm64
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+        target:
+          - fuzz_types
+          - fuzz_schema
+          - fuzz_doc
+          - fuzz_query
+          - fuzz_collection
+        exclude:
+          - platform: linux-x64
+            os: ubuntu-24.04-arm
+          - platform: linux-arm64
+            os: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+
+      - name: Clone and build zvec C library
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+          NPROC=$(nproc 2>/dev/null || echo 2)
+          python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
+          CMAKE_GENERATOR="Unix Makefiles" CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" python -m pip install -v . --no-build-isolation --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      - name: Set library path
+        run: |
+          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
+          echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Run fuzz target
+        run: |
+          FUZZ_SECONDS="${{ github.event.inputs.fuzz_seconds || '60' }}"
+          cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=$FUZZ_SECONDS
+        shell: bash
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ matrix.platform }}-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/

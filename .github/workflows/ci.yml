@@ -1,0 +1,358 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  msrv:
+    name: MSRV Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.70"
+      - run: cargo check --workspace --lib
+
+  clippy:
+    name: Clippy (${{ matrix.platform }})
+    needs: [fmt, msrv]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-15
+          - platform: macos-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-24.04
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+          - platform: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        if: runner.os != 'Windows'
+        with:
+          python-version: '3.10'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.platform }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ matrix.platform }}-cargo-
+
+      - name: Clone and build zvec C library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+
+          if [[ "${{ matrix.platform }}" == macos-* ]]; then
+            NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+          else
+            NPROC=$(nproc 2>/dev/null || echo 2)
+          fi
+
+          python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
+
+          CMAKE_GENERATOR="Unix Makefiles" \
+          CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" \
+          python -m pip install -v . \
+            --no-build-isolation \
+            --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      - name: Clone and build zvec C library (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
+          cmake --build . --config Release --parallel
+        shell: bash
+
+      - name: Set library path (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
+          echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+
+          if [[ "${{ matrix.platform }}" == macos-* ]]; then
+            echo "DYLD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          else
+            echo "LD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Set library path (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $libDir = Resolve-Path "../zvec/build/Release" -ErrorAction SilentlyContinue
+          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/lib" -ErrorAction SilentlyContinue }
+          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/src/binding/c/Release" -ErrorAction SilentlyContinue }
+          if ($libDir) {
+            echo "ZVEC_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+            echo "$libDir" >> $env:GITHUB_PATH
+          }
+        shell: pwsh
+
+      - name: Clippy lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        shell: bash
+
+  test:
+    name: Test (${{ matrix.platform }})
+    needs: clippy
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-15
+          - platform: macos-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-24.04
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+          - platform: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        if: runner.os != 'Windows'
+        with:
+          python-version: '3.10'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ matrix.platform }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ matrix.platform }}-cargo-
+
+      - name: Clone and build zvec C library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+
+          if [[ "${{ matrix.platform }}" == macos-* ]]; then
+            NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+          else
+            NPROC=$(nproc 2>/dev/null || echo 2)
+          fi
+
+          python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
+
+          CMAKE_GENERATOR="Unix Makefiles" \
+          CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" \
+          python -m pip install -v . \
+            --no-build-isolation \
+            --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      - name: Clone and build zvec C library (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
+          cmake --build . --config Release --parallel
+        shell: bash
+
+      - name: Set library path (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
+          echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+
+          if [[ "${{ matrix.platform }}" == macos-* ]]; then
+            echo "DYLD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          else
+            echo "LD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Set library path (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $libDir = Resolve-Path "../zvec/build/Release" -ErrorAction SilentlyContinue
+          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/lib" -ErrorAction SilentlyContinue }
+          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/src/binding/c/Release" -ErrorAction SilentlyContinue }
+          if ($libDir) {
+            echo "ZVEC_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+            echo "$libDir" >> $env:GITHUB_PATH
+          }
+        shell: pwsh
+
+      - name: Run unit tests
+        run: cargo test --workspace --lib -- --nocapture
+        shell: bash
+
+      - name: Run integration tests
+        run: cargo test --workspace --test '*' -- --nocapture
+        shell: bash
+
+      - name: Run doc tests
+        run: cargo test --workspace --doc
+        shell: bash
+
+      - name: Compile benchmarks (no run)
+        run: cargo bench --workspace --no-run
+        shell: bash
+
+  audit:
+    name: Security Audit
+    needs: test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit || true
+        shell: bash
+
+  sync-check:
+    name: Upstream Sync Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check zvec C-API version compatibility
+        run: |
+          echo "Checking zvec-sys FFI declarations against upstream C-API headers..."
+          UPSTREAM_VERSION=$(grep '^version' zvec-sys/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "zvec-sys version: $UPSTREAM_VERSION"
+
+          ZVEC_VERSION=$(grep '^version' zvec/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "zvec version: $ZVEC_VERSION"
+
+          if [ "$UPSTREAM_VERSION" != "$ZVEC_VERSION" ]; then
+            echo "::warning::zvec-sys ($UPSTREAM_VERSION) and zvec ($ZVEC_VERSION) versions are out of sync"
+          else
+            echo "✅ Versions are in sync: $UPSTREAM_VERSION"
+          fi
+        shell: bash
+
+  benchmark:
+    name: Benchmark
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: bench-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            bench-cargo-
+
+      - name: Clone and build zvec C library
+        run: |
+          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+          NPROC=$(nproc 2>/dev/null || echo 2)
+          python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
+          CMAKE_GENERATOR="Unix Makefiles" CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" python -m pip install -v . --no-build-isolation --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      - name: Set library path
+        run: |
+          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
+          echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Run benchmarks
+        run: cargo bench --workspace -- --output-format bencher | tee benchmark-output.txt
+        shell: bash
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: cargo
+          output-file-path: benchmark-output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: false
