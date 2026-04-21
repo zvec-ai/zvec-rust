@@ -52,8 +52,8 @@ jobs:
         include:
           - platform: macos-arm64
             os: macos-15
-          - platform: macos-x64
-            os: macos-13
+          # - platform: macos-x64
+          #   os: macos-13
           - platform: linux-x64
             os: ubuntu-24.04
           - platform: linux-arm64
