@@ -49,7 +49,7 @@ jobs:
 
       - name: Clone and build zvec C library
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           NPROC=$(nproc 2>/dev/null || echo 2)
 

@@ -86,7 +86,7 @@ jobs:
       - name: Clone and build zvec C library (Unix)
         if: runner.os != 'Windows'
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
 
@@ -103,7 +103,7 @@ jobs:
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
@@ -180,7 +180,7 @@ jobs:
       - name: Clone and build zvec C library (Unix)
         if: runner.os != 'Windows'
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
 
@@ -197,7 +197,7 @@ jobs:
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
@@ -306,7 +306,7 @@ jobs:
 
       - name: Clone and build zvec C library
         run: |
-          git clone --depth 1 https://github.com/alibaba/zvec.git ../zvec
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           NPROC=$(nproc 2>/dev/null || echo 2)
           mkdir -p build && cd build
