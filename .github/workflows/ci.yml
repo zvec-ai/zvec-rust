@@ -96,7 +96,7 @@ jobs:
             NPROC=$(nproc 2>/dev/null || echo 2)
           fi
 
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
@@ -190,7 +190,7 @@ jobs:
             NPROC=$(nproc 2>/dev/null || echo 2)
           fi
 
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
@@ -310,7 +310,7 @@ jobs:
           cd ../zvec
           NPROC=$(nproc 2>/dev/null || echo 2)
           mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
