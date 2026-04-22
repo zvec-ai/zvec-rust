@@ -33,9 +33,9 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-15
             lib_name: libzvec_c_api.dylib
-          - target: x86_64-apple-darwin
-            os: macos-13
-            lib_name: libzvec_c_api.dylib
+          # - target: x86_64-apple-darwin
+          #   os: macos-13
+          #   lib_name: libzvec_c_api.dylib
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-24.04
             lib_name: libzvec_c_api.so
