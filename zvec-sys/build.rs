@@ -162,12 +162,15 @@ fn resolve_include_dir(
 
 fn has_zvec_lib(dir: &Path) -> bool {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let lib_name = match target_os.as_str() {
-        "macos" | "ios" => "libzvec_c_api.dylib",
-        "windows" => "zvec_c_api.dll",
-        _ => "libzvec_c_api.so",
-    };
-    dir.join(lib_name).exists()
+    match target_os.as_str() {
+        "macos" | "ios" => dir.join("libzvec_c_api.dylib").exists(),
+        "windows" => {
+            // MSVC dynamic linking requires the .lib import library;
+            // the .dll alone is not enough for the linker.
+            dir.join("zvec_c_api.lib").exists() || dir.join("zvec_c_api.dll").exists()
+        }
+        _ => dir.join("libzvec_c_api.so").exists(),
+    }
 }
 
 fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
@@ -266,19 +269,28 @@ fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
         }
     }
 
-    let lib_dir = cmake_build_dir.join("lib");
-    if lib_dir.exists() && has_zvec_lib(&lib_dir) {
-        println!(
-            "cargo:warning=Successfully built zvec C library at {}",
-            lib_dir.display()
-        );
-        return Some(lib_dir);
-    }
+    // Search for the built library in all known output locations.
+    // MSVC places outputs under a config-specific subdirectory (e.g. Release/).
+    let candidate_dirs = [
+        cmake_build_dir.join("lib"),
+        cmake_build_dir.join("lib").join("Release"),
+        cmake_build_dir.join("Release"),
+        cmake_build_dir.join("src").join("binding").join("c"),
+        cmake_build_dir
+            .join("src")
+            .join("binding")
+            .join("c")
+            .join("Release"),
+    ];
 
-    // Some CMake configs put libs in different places
-    let alt_lib_dir = cmake_build_dir.join("src").join("binding").join("c");
-    if alt_lib_dir.exists() && has_zvec_lib(&alt_lib_dir) {
-        return Some(alt_lib_dir);
+    for candidate in &candidate_dirs {
+        if candidate.exists() && has_zvec_lib(candidate) {
+            println!(
+                "cargo:warning=Successfully built zvec C library at {}",
+                candidate.display()
+            );
+            return Some(candidate.clone());
+        }
     }
 
     println!("cargo:warning=Auto-build completed but library not found in expected location.");

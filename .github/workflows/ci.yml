@@ -126,12 +126,27 @@ jobs:
       - name: Set library path (Windows)
         if: runner.os == 'Windows'
         run: |
-          $libDir = Resolve-Path "../zvec/build/Release" -ErrorAction SilentlyContinue
-          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/lib" -ErrorAction SilentlyContinue }
-          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/src/binding/c/Release" -ErrorAction SilentlyContinue }
-          if ($libDir) {
-            echo "ZVEC_LIB_DIR=$libDir" >> $env:GITHUB_ENV
-            echo "$libDir" >> $env:GITHUB_PATH
+          # Collect all .lib and .dll files so we can find the actual output location
+          Write-Host "Searching for zvec_c_api library files..."
+          $found = Get-ChildItem -Path "../zvec/build" -Recurse -Include "zvec_c_api.lib","zvec_c_api.dll" -ErrorAction SilentlyContinue
+          foreach ($f in $found) { Write-Host "  Found: $($f.FullName)" }
+
+          # Create a canonical lib directory and copy all library files there
+          $canonicalDir = (Resolve-Path "../zvec/build").Path + "\lib"
+          New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
+
+          foreach ($f in $found) {
+            Copy-Item $f.FullName -Destination $canonicalDir -Force
+            Write-Host "  Copied $($f.Name) -> $canonicalDir"
+          }
+
+          if (Test-Path "$canonicalDir\zvec_c_api.lib") {
+            Write-Host "Library directory: $canonicalDir"
+            echo "ZVEC_LIB_DIR=$canonicalDir" >> $env:GITHUB_ENV
+            echo "$canonicalDir" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "::error::Could not find zvec_c_api.lib anywhere under ../zvec/build"
+            exit 1
           }
         shell: pwsh
 
@@ -220,12 +235,27 @@ jobs:
       - name: Set library path (Windows)
         if: runner.os == 'Windows'
         run: |
-          $libDir = Resolve-Path "../zvec/build/Release" -ErrorAction SilentlyContinue
-          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/lib" -ErrorAction SilentlyContinue }
-          if (-not $libDir) { $libDir = Resolve-Path "../zvec/build/src/binding/c/Release" -ErrorAction SilentlyContinue }
-          if ($libDir) {
-            echo "ZVEC_LIB_DIR=$libDir" >> $env:GITHUB_ENV
-            echo "$libDir" >> $env:GITHUB_PATH
+          # Collect all .lib and .dll files so we can find the actual output location
+          Write-Host "Searching for zvec_c_api library files..."
+          $found = Get-ChildItem -Path "../zvec/build" -Recurse -Include "zvec_c_api.lib","zvec_c_api.dll" -ErrorAction SilentlyContinue
+          foreach ($f in $found) { Write-Host "  Found: $($f.FullName)" }
+
+          # Create a canonical lib directory and copy all library files there
+          $canonicalDir = (Resolve-Path "../zvec/build").Path + "\lib"
+          New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
+
+          foreach ($f in $found) {
+            Copy-Item $f.FullName -Destination $canonicalDir -Force
+            Write-Host "  Copied $($f.Name) -> $canonicalDir"
+          }
+
+          if (Test-Path "$canonicalDir\zvec_c_api.lib") {
+            Write-Host "Library directory: $canonicalDir"
+            echo "ZVEC_LIB_DIR=$canonicalDir" >> $env:GITHUB_ENV
+            echo "$canonicalDir" >> $env:GITHUB_PATH
+          } else {
+            Write-Host "::error::Could not find zvec_c_api.lib anywhere under ../zvec/build"
+            exit 1
           }
         shell: pwsh
 
