@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v0.3.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,7 +20,7 @@ jobs:
     name: Build Prebuilt Libraries
     uses: ./.github/workflows/build-prebuilt.yml
     with:
-      zvec_ref: v0.3.1
+      zvec_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'main' }}
 
   # Step 2: Create release and upload prebuilt libraries
   release:
@@ -23,10 +29,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW_TAG="${{ inputs.tag }}"
+          else
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION=$(echo "$RAW_TAG" | sed 's/^v//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$RAW_TAG" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Verify Cargo.toml versions match tag
         run: |
@@ -58,9 +75,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+          prerelease: ${{ contains(steps.version.outputs.tag, 'alpha') || contains(steps.version.outputs.tag, 'beta') || contains(steps.version.outputs.tag, 'rc') }}
           files: prebuilt-artifacts/**/*.tar.gz
 
       - name: Publish to crates.io
