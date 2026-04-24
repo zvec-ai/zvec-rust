@@ -47,8 +47,17 @@ jobs:
 
       - name: Verify Cargo.toml versions match tag
         run: |
-          SYS_VERSION=$(grep '^version' zvec-sys/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          SDK_VERSION=$(grep '^version' zvec/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          extract_version() {
+            local file="$1"
+            local ver=$(grep '^version' "$file" | head -1 | sed 's/.*"\(.*\)"/\1/')
+            if [ "$ver" = "version.workspace = true" ]; then
+              ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+            fi
+            echo "$ver"
+          }
+
+          SYS_VERSION=$(extract_version zvec-sys/Cargo.toml)
+          SDK_VERSION=$(extract_version zvec/Cargo.toml)
           TAG_VERSION="${{ steps.version.outputs.version }}"
 
           if [ "$SYS_VERSION" != "$TAG_VERSION" ] || [ "$SDK_VERSION" != "$TAG_VERSION" ]; then
