@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// GitHub repository for downloading prebuilt libraries.
-const PREBUILT_REPO: &str = "sunhailin-Leo/zvec-rust";
+const PREBUILT_REPO: &str = "chinaux/zvec-rust";
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
