@@ -56,8 +56,10 @@ jobs:
 
       - name: Clone zvec
         run: |
-          git clone --depth 1 --branch ${{ inputs.zvec_ref || 'main' }} \
+          git clone --branch ${{ inputs.zvec_ref || 'main' }} \
             https://github.com/alibaba/zvec.git ../zvec
+          cd ../zvec
+          git submodule update --init --recursive
         shell: bash
 
       - name: Build zvec C library (Unix)
