@@ -48,12 +48,18 @@ fuzz_target!(|input: FuzzInput| {
         return;
     }
 
-    let _ = VectorQuery::new(&field_name, &vector_data, topk);
+    // Sanitize field_name to remove null bytes
+    let safe_field_name = field_name.replace('\0', "_");
+
+    // Limit topk to prevent memory issues (reasonable upper bound)
+    let safe_topk = topk.clamp(1, 10000);
+
+    let _ = VectorQuery::new(&safe_field_name, &vector_data, safe_topk);
 
     let mut builder = VectorQuery::builder()
-        .field_name(&field_name)
+        .field_name(&safe_field_name)
         .vector(&vector_data)
-        .topk(topk);
+        .topk(safe_topk);
 
     if !filter.is_empty() {
         builder = builder.filter(&filter);

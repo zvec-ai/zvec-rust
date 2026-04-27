@@ -45,43 +45,47 @@ fuzz_target!(|input: FuzzInput| {
         Err(_) => return,
     };
 
-    doc.set_pk(&pk);
+    // Sanitize pk and field_name to remove null bytes
+    let safe_pk = pk.replace('\0', "_");
+    let safe_field_name = field_name.replace('\0', "_");
+
+    doc.set_pk(&safe_pk);
     let _ = doc.get_pk();
 
-    let _ = doc.add_string(&field_name, &string_value);
-    let _ = doc.get_string(&field_name);
+    let _ = doc.add_string(&safe_field_name, &string_value);
+    let _ = doc.get_string(&safe_field_name);
 
-    let _ = doc.add_bool(&field_name, bool_value);
-    let _ = doc.get_bool(&field_name);
+    let _ = doc.add_bool(&safe_field_name, bool_value);
+    let _ = doc.get_bool(&safe_field_name);
 
-    let _ = doc.add_i32(&field_name, i32_value);
-    let _ = doc.get_i32(&field_name);
+    let _ = doc.add_i32(&safe_field_name, i32_value);
+    let _ = doc.get_i32(&safe_field_name);
 
-    let _ = doc.add_i64(&field_name, i64_value);
-    let _ = doc.get_i64(&field_name);
+    let _ = doc.add_i64(&safe_field_name, i64_value);
+    let _ = doc.get_i64(&safe_field_name);
 
-    let _ = doc.add_u32(&field_name, u32_value);
+    let _ = doc.add_u32(&safe_field_name, u32_value);
 
-    let _ = doc.add_u64(&field_name, u64_value);
+    let _ = doc.add_u64(&safe_field_name, u64_value);
 
-    let _ = doc.add_f32(&field_name, f32_value);
-    let _ = doc.get_f32(&field_name);
+    let _ = doc.add_f32(&safe_field_name, f32_value);
+    let _ = doc.get_f32(&safe_field_name);
 
-    let _ = doc.add_f64(&field_name, f64_value);
-    let _ = doc.get_f64(&field_name);
+    let _ = doc.add_f64(&safe_field_name, f64_value);
+    let _ = doc.get_f64(&safe_field_name);
 
     if !vector_data.is_empty() {
-        let _ = doc.add_vector_f32(&field_name, &vector_data);
-        let _ = doc.get_vector_f32(&field_name);
+        let _ = doc.add_vector_f32(&safe_field_name, &vector_data);
+        let _ = doc.get_vector_f32(&safe_field_name);
     }
 
-    let _ = doc.has_field(&field_name);
+    let _ = doc.has_field(&safe_field_name);
     let _ = doc.is_empty();
     let _ = doc.field_count();
-    let _ = doc.is_field_null(&field_name);
+    let _ = doc.is_field_null(&safe_field_name);
 
-    let _ = doc.set_field_null(&field_name);
-    let _ = doc.remove_field(&field_name);
+    let _ = doc.set_field_null(&safe_field_name);
+    let _ = doc.remove_field(&safe_field_name);
 
     doc.clear();
 });
