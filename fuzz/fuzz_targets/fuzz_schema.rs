@@ -42,10 +42,11 @@ fuzz_target!(|input: FuzzInput| {
 
     let metric = MetricType::from(metric_type);
 
-    let _ = FieldSchema::new(&field_name, DataType::String, false, 0);
-    let _ = FieldSchema::new(&field_name, DataType::Int64, false, 0);
-    let _ = FieldSchema::new(&field_name, DataType::Float, false, 0);
-    let _ = FieldSchema::new(&field_name, DataType::VectorFp32, false, dimension);
+    // Use try_new to handle invalid field names (e.g., containing null bytes)
+    let _ = FieldSchema::try_new(&field_name, DataType::String, false, 0);
+    let _ = FieldSchema::try_new(&field_name, DataType::Int64, false, 0);
+    let _ = FieldSchema::try_new(&field_name, DataType::Float, false, 0);
+    let _ = FieldSchema::try_new(&field_name, DataType::VectorFp32, false, dimension);
 
     let _ = IndexParams::hnsw(metric, m, ef_construction);
     let _ = IndexParams::hnsw_with_quantize(metric, m, ef_construction, zvec::QuantizeType::Int8);
@@ -53,10 +54,13 @@ fuzz_target!(|input: FuzzInput| {
     let _ = IndexParams::flat(metric);
     let _ = IndexParams::invert(enable_range_opt, enable_wildcard);
 
+    // Use try_new to handle invalid field names
     let _ = zvec::CollectionSchema::builder(&collection_name)
-        .add_field(FieldSchema::new(&field_name, DataType::String, false, 0))
+        .add_field(FieldSchema::try_new(&field_name, DataType::String, false, 0).unwrap_or_else(|_| {
+            FieldSchema::new("default_field", DataType::String, false, 0)
+        }))
         .add_vector_field(
-            &format!("{}_vec", field_name),
+            &format!("{}_vec", field_name.replace('\0', "_")),
             DataType::VectorFp32,
             dimension,
             IndexParams::hnsw(metric, m, ef_construction),
