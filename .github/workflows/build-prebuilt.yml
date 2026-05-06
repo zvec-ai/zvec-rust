@@ -62,8 +62,24 @@ jobs:
           git submodule update --init --recursive
         shell: bash
 
+      # Use manylinux_2_28 container for Linux x64 to ensure broad GLIBC compatibility
+      - name: Build zvec C library (Linux x64 manylinux)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          docker run --rm \
+            -v "$PWD/../zvec:/zvec" \
+            -w /zvec \
+            quay.io/pypa/manylinux_2_28_x86_64 \
+            bash -c "
+              dnf install -y cmake gcc-c++ git
+              mkdir -p build && cd build
+              cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
+              cmake --build . --config Release -j\$(nproc)
+            "
+        shell: bash
+
       - name: Build zvec C library (Unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.target != 'x86_64-unknown-linux-gnu'
         run: |
           cd ../zvec
 
