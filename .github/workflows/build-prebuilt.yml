@@ -73,7 +73,7 @@ jobs:
             bash -c "
               dnf install -y cmake gcc-c++ git
               mkdir -p build && cd build
-              cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
+              cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
               cmake --build . --config Release -j\$(nproc)
             "
         shell: bash
