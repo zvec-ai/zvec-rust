@@ -8,15 +8,15 @@ fn main() -> zvec::Result<()> {
 
     // Create schema
     let schema = CollectionSchema::builder("crud_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("name", DataType::String, true, 0))
-        .add_field(FieldSchema::new("age", DataType::Int32, true, 0))
-        .add_field(FieldSchema::new("email", DataType::String, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_field(FieldSchema::new("name", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("age", DataType::Int32, true, 0)?)
+        .add_field(FieldSchema::new("email", DataType::String, true, 0)?)
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::hnsw(MetricType::Cosine, 16, 100),
+            IndexParams::hnsw(MetricType::Cosine, 16, 100)?,
         )
         .build()?;
 
@@ -62,10 +62,8 @@ fn main() -> zvec::Result<()> {
     println!("Fetched {} documents by primary keys:", fetched_docs.len());
     for doc in &fetched_docs {
         let pk = doc.get_pk().unwrap_or("<unknown>");
-        let name = doc
-            .get_string("name")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let age = doc.get_i32("age").unwrap_or(0);
+        let name = doc.get_string("name")?.unwrap_or_default();
+        let age = doc.get_i32("age")?.unwrap_or(0);
         println!("  pk={}, name={}, age={}", pk, name, age);
     }
 
@@ -88,13 +86,9 @@ fn main() -> zvec::Result<()> {
     // Verify update
     let updated_docs = collection.fetch(&["user_1"])?;
     if let Some(doc) = updated_docs.first() {
-        let name = doc
-            .get_string("name")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let age = doc.get_i32("age").unwrap_or(0);
-        let email = doc
-            .get_string("email")
-            .unwrap_or_else(|_| "<none>".to_string());
+        let name = doc.get_string("name")?.unwrap_or_default();
+        let age = doc.get_i32("age")?.unwrap_or(0);
+        let email = doc.get_string("email")?.unwrap_or_default();
         println!(
             "  Updated document: name='{}', age={}, email='{}'",
             name, age, email
@@ -135,9 +129,7 @@ fn main() -> zvec::Result<()> {
     println!("  Verified upserted documents:");
     for doc in &upsert_verify {
         let pk = doc.get_pk().unwrap_or("<unknown>");
-        let name = doc
-            .get_string("name")
-            .unwrap_or_else(|_| "<none>".to_string());
+        let name = doc.get_string("name")?.unwrap_or_default();
         println!("    pk={}, name='{}'", pk, name);
     }
 
@@ -147,8 +139,12 @@ fn main() -> zvec::Result<()> {
     println!("Collection statistics:");
     println!("  Total documents: {}", stats.doc_count);
     println!("  Indexes:");
-    for (name, completeness) in stats.index_names.iter().zip(&stats.index_completeness) {
-        println!("    '{}': {:.1}% complete", name, completeness * 100.0);
+    for index in &stats.indexes {
+        println!(
+            "    '{}': {:.1}% complete",
+            index.name,
+            index.completeness * 100.0
+        );
     }
 
     // === QUERY (Vector Search) ===
@@ -166,9 +162,7 @@ fn main() -> zvec::Result<()> {
     for (i, result) in results.iter().enumerate() {
         let pk = result.get_pk().unwrap_or("<unknown>");
         let score = result.get_score();
-        let name = result
-            .get_string("name")
-            .unwrap_or_else(|_| "<none>".to_string());
+        let name = result.get_string("name")?.unwrap_or_default();
         println!(
             "  #{}: pk={}, similarity={:.4}, name='{}'",
             i + 1,

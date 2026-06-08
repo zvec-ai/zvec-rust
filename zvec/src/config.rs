@@ -1,39 +1,42 @@
 use std::ffi::CStr;
 
-use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
+use crate::error::{check_error, Error, ErrorCode, Result};
 use crate::types::LogLevel;
 
-/// A plain-data builder for [`ConfigData`].
+/// Configuration builder for initializing the zvec library.
 ///
 /// This struct collects configuration values without touching the C library,
 /// making it safe to use even before the library is initialized.
 ///
 /// # Example
 /// ```no_run
-/// use zvec::ConfigDataBuilder;
+/// use zvec::ConfigBuilder;
 ///
-/// let config = ConfigDataBuilder::new()
+/// let config = ConfigBuilder::new()
 ///     .memory_limit(1024 * 1024 * 1024)
 ///     .num_threads(4)
 ///     .enable_console_log(true)
 ///     .build();
 /// ```
-pub struct ConfigDataBuilder {
+pub struct ConfigBuilder {
     /// Memory limit in bytes (0 = use library default).
     pub memory_limit: u64,
     /// Number of threads for query and optimize (0 = use library default).
     pub num_threads: u32,
     /// Whether to enable console logging at Info level.
     pub enable_console_log: bool,
+    /// FTS brute-force-by-keys ratio (None = use library default).
+    pub fts_brute_force_by_keys_ratio: Option<f32>,
 }
 
-impl ConfigDataBuilder {
+impl ConfigBuilder {
     /// Creates a new builder with default values.
     pub fn new() -> Self {
-        ConfigDataBuilder {
+        ConfigBuilder {
             memory_limit: 0,
             num_threads: 0,
             enable_console_log: false,
+            fts_brute_force_by_keys_ratio: None,
         }
     }
 
@@ -55,6 +58,12 @@ impl ConfigDataBuilder {
         self
     }
 
+    /// Sets the FTS brute-force-by-keys ratio.
+    pub fn fts_brute_force_by_keys_ratio(mut self, ratio: f32) -> Self {
+        self.fts_brute_force_by_keys_ratio = Some(ratio);
+        self
+    }
+
     /// Finalizes the builder configuration.
     ///
     /// This is a no-op that returns `self` for API consistency. The builder
@@ -65,23 +74,19 @@ impl ConfigDataBuilder {
     }
 }
 
-impl Default for ConfigDataBuilder {
+impl Default for ConfigBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Global configuration for the zvec library.
-///
-/// Use this to configure memory limits, thread counts, and logging
-/// before calling [`initialize`].
-pub struct ConfigData {
+/// Low-level configuration handle wrapping the C API config.
+pub(crate) struct ConfigData {
     pub(crate) handle: *mut zvec_sys::zvec_config_data_t,
 }
 
 impl ConfigData {
-    /// Creates a new configuration with default values.
-    pub fn new() -> Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         let handle = unsafe { zvec_sys::zvec_config_data_create() };
         if handle.is_null() {
             return Err(Error {
@@ -92,42 +97,29 @@ impl ConfigData {
         Ok(ConfigData { handle })
     }
 
-    /// Sets the memory limit in bytes.
-    pub fn set_memory_limit(&mut self, bytes: u64) -> Result<()> {
+    pub(crate) fn set_memory_limit(&mut self, bytes: u64) -> Result<()> {
         check_error(unsafe { zvec_sys::zvec_config_data_set_memory_limit(self.handle, bytes) })
     }
 
-    /// Returns the memory limit in bytes.
-    pub fn memory_limit(&self) -> u64 {
-        unsafe { zvec_sys::zvec_config_data_get_memory_limit(self.handle) }
-    }
-
-    /// Sets the number of query threads.
-    pub fn set_query_thread_count(&mut self, count: u32) -> Result<()> {
+    pub(crate) fn set_query_thread_count(&mut self, count: u32) -> Result<()> {
         check_error(unsafe {
             zvec_sys::zvec_config_data_set_query_thread_count(self.handle, count)
         })
     }
 
-    /// Returns the number of query threads.
-    pub fn query_thread_count(&self) -> u32 {
-        unsafe { zvec_sys::zvec_config_data_get_query_thread_count(self.handle) }
-    }
-
-    /// Sets the number of optimize threads.
-    pub fn set_optimize_thread_count(&mut self, count: u32) -> Result<()> {
+    pub(crate) fn set_optimize_thread_count(&mut self, count: u32) -> Result<()> {
         check_error(unsafe {
             zvec_sys::zvec_config_data_set_optimize_thread_count(self.handle, count)
         })
     }
 
-    /// Returns the number of optimize threads.
-    pub fn optimize_thread_count(&self) -> u32 {
-        unsafe { zvec_sys::zvec_config_data_get_optimize_thread_count(self.handle) }
+    pub(crate) fn set_fts_brute_force_by_keys_ratio(&mut self, ratio: f32) -> Result<()> {
+        check_error(unsafe {
+            zvec_sys::zvec_config_data_set_fts_brute_force_by_keys_ratio(self.handle, ratio)
+        })
     }
 
-    /// Configures console logging at the specified level.
-    pub fn set_console_log(&mut self, level: LogLevel) -> Result<()> {
+    pub(crate) fn set_console_log(&mut self, level: LogLevel) -> Result<()> {
         let log_config = unsafe { zvec_sys::zvec_config_log_create_console(level as u32) };
         if log_config.is_null() {
             return Err(Error {
@@ -146,43 +138,6 @@ impl ConfigData {
         result
     }
 
-    /// Configures file logging at the specified level.
-    pub fn set_file_log(
-        &mut self,
-        level: LogLevel,
-        dir: &str,
-        basename: &str,
-        file_size_mb: u32,
-        overdue_days: u32,
-    ) -> Result<()> {
-        let c_dir = to_cstring(dir)?;
-        let c_basename = to_cstring(basename)?;
-
-        let log_config = unsafe {
-            zvec_sys::zvec_config_log_create_file(
-                level as u32,
-                c_dir.as_ptr(),
-                c_basename.as_ptr(),
-                file_size_mb,
-                overdue_days,
-            )
-        };
-        if log_config.is_null() {
-            return Err(Error {
-                code: ErrorCode::InternalError,
-                message: "failed to create file log config".into(),
-            });
-        }
-        // Ownership of log_config transfers to config_data on success.
-        // On failure, we must free it manually to avoid a leak.
-        let result = check_error(unsafe {
-            zvec_sys::zvec_config_data_set_log_config(self.handle, log_config)
-        });
-        if result.is_err() {
-            unsafe { zvec_sys::zvec_config_log_destroy(log_config) };
-        }
-        result
-    }
 }
 
 impl Drop for ConfigData {
@@ -196,8 +151,8 @@ impl Drop for ConfigData {
 
 /// Initializes the zvec library with optional configuration.
 ///
-/// Accepts either a [`ConfigData`] (low-level) or a [`ConfigDataBuilder`]
-/// (high-level builder). Pass `None` to use default configuration.
+/// Pass `None` to use default configuration, or provide a [`ConfigBuilder`]
+/// to customize memory limits, thread counts, and logging.
 ///
 /// # Examples
 ///
@@ -208,14 +163,14 @@ impl Drop for ConfigData {
 /// initialize(None)?;
 ///
 /// // With builder
-/// let config = ConfigDataBuilder::new()
+/// let config = ConfigBuilder::new()
 ///     .memory_limit(1024 * 1024 * 1024)
 ///     .num_threads(4)
 ///     .build();
 /// initialize(Some(&config))?;
 /// # Ok::<(), zvec::Error>(())
 /// ```
-pub fn initialize(config: Option<&ConfigDataBuilder>) -> Result<()> {
+pub fn initialize(config: Option<&ConfigBuilder>) -> Result<()> {
     match config {
         None => check_error(unsafe { zvec_sys::zvec_initialize(std::ptr::null()) }),
         Some(builder) => {
@@ -230,12 +185,16 @@ pub fn initialize(config: Option<&ConfigDataBuilder>) -> Result<()> {
             if builder.enable_console_log {
                 cfg.set_console_log(LogLevel::Info)?;
             }
+            if let Some(ratio) = builder.fts_brute_force_by_keys_ratio {
+                cfg.set_fts_brute_force_by_keys_ratio(ratio)?;
+            }
             check_error(unsafe { zvec_sys::zvec_initialize(cfg.handle as *const _) })
         }
     }
 }
 
 /// Shuts down the zvec library and releases all resources.
+#[doc(hidden)]
 pub fn shutdown() -> Result<()> {
     check_error(unsafe { zvec_sys::zvec_shutdown() })
 }
@@ -282,7 +241,7 @@ mod tests {
 
     #[test]
     fn config_builder_defaults() {
-        let builder = ConfigDataBuilder::new();
+        let builder = ConfigBuilder::new();
         assert_eq!(builder.memory_limit, 0);
         assert_eq!(builder.num_threads, 0);
         assert!(!builder.enable_console_log);
@@ -290,7 +249,7 @@ mod tests {
 
     #[test]
     fn config_builder_chaining() {
-        let builder = ConfigDataBuilder::new()
+        let builder = ConfigBuilder::new()
             .memory_limit(1024)
             .num_threads(4)
             .enable_console_log(true)
@@ -302,7 +261,7 @@ mod tests {
 
     #[test]
     fn config_builder_default_trait() {
-        let builder = ConfigDataBuilder::default();
+        let builder = ConfigBuilder::default();
         assert_eq!(builder.memory_limit, 0);
         assert_eq!(builder.num_threads, 0);
         assert!(!builder.enable_console_log);
@@ -310,25 +269,25 @@ mod tests {
 
     #[test]
     fn config_builder_memory_limit_setter() {
-        let builder = ConfigDataBuilder::new().memory_limit(2048);
+        let builder = ConfigBuilder::new().memory_limit(2048);
         assert_eq!(builder.memory_limit, 2048);
     }
 
     #[test]
     fn config_builder_num_threads_setter() {
-        let builder = ConfigDataBuilder::new().num_threads(8);
+        let builder = ConfigBuilder::new().num_threads(8);
         assert_eq!(builder.num_threads, 8);
     }
 
     #[test]
     fn config_builder_enable_console_log_setter() {
-        let builder = ConfigDataBuilder::new().enable_console_log(true);
+        let builder = ConfigBuilder::new().enable_console_log(true);
         assert!(builder.enable_console_log);
     }
 
     #[test]
     fn config_builder_build_returns_self() {
-        let builder = ConfigDataBuilder::new()
+        let builder = ConfigBuilder::new()
             .memory_limit(4096)
             .num_threads(2)
             .enable_console_log(true)
@@ -340,7 +299,7 @@ mod tests {
 
     #[test]
     fn config_builder_overwrite_values() {
-        let builder = ConfigDataBuilder::new()
+        let builder = ConfigBuilder::new()
             .memory_limit(1024)
             .memory_limit(2048)
             .num_threads(4)
@@ -354,14 +313,23 @@ mod tests {
 
     #[test]
     fn config_builder_zero_values() {
-        let builder = ConfigDataBuilder::new().memory_limit(0).num_threads(0);
+        let builder = ConfigBuilder::new().memory_limit(0).num_threads(0);
         assert_eq!(builder.memory_limit, 0);
         assert_eq!(builder.num_threads, 0);
     }
 
     #[test]
     fn config_builder_large_memory_limit() {
-        let builder = ConfigDataBuilder::new().memory_limit(u64::MAX);
+        let builder = ConfigBuilder::new().memory_limit(u64::MAX);
         assert_eq!(builder.memory_limit, u64::MAX);
+    }
+
+    #[test]
+    fn config_builder_fts_ratio() {
+        let builder = ConfigBuilder::new();
+        assert_eq!(builder.fts_brute_force_by_keys_ratio, None);
+
+        let builder = ConfigBuilder::new().fts_brute_force_by_keys_ratio(0.5);
+        assert_eq!(builder.fts_brute_force_by_keys_ratio, Some(0.5));
     }
 }

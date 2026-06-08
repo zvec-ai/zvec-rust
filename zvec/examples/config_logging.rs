@@ -15,11 +15,11 @@ fn main() -> zvec::Result<()> {
     // Shutdown to allow re-initialization with custom config
     shutdown()?;
 
-    // === Example 2: Custom Configuration with ConfigDataBuilder ===
+    // === Example 2: Custom Configuration with ConfigBuilder ===
     println!("\n=== Example 2: Custom Configuration ===");
 
     // Create custom configuration using the builder
-    let config = ConfigDataBuilder::new()
+    let config = ConfigBuilder::new()
         .memory_limit(1024 * 1024 * 1024) // 1GB memory limit
         .num_threads(4) // Use 4 threads
         .build();
@@ -38,7 +38,7 @@ fn main() -> zvec::Result<()> {
     println!("\n=== Example 3: Configuration with Console Logging ===");
 
     // Create configuration with console logging enabled
-    let config_with_logging = ConfigDataBuilder::new()
+    let config_with_logging = ConfigBuilder::new()
         .memory_limit(512 * 1024 * 1024) // 512MB memory limit
         .num_threads(2) // Use 2 threads
         .enable_console_log(true) // Enable console logging
@@ -66,13 +66,13 @@ fn main() -> zvec::Result<()> {
 
     // Create a simple schema
     let schema = CollectionSchema::builder("logging_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("name", DataType::String, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_field(FieldSchema::new("name", DataType::String, true, 0)?)
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::flat(MetricType::L2),
+            IndexParams::flat(MetricType::L2)?,
         )
         .build()?;
 
@@ -106,7 +106,7 @@ fn main() -> zvec::Result<()> {
 
     // Scenario 1: Low memory configuration
     println!("\nScenario 1: Low Memory Configuration");
-    let low_mem_config = ConfigDataBuilder::new()
+    let low_mem_config = ConfigBuilder::new()
         .memory_limit(256 * 1024 * 1024) // 256MB
         .num_threads(1)
         .enable_console_log(false)
@@ -120,7 +120,7 @@ fn main() -> zvec::Result<()> {
 
     // Scenario 2: High performance configuration
     println!("\nScenario 2: High Performance Configuration");
-    let high_perf_config = ConfigDataBuilder::new()
+    let high_perf_config = ConfigBuilder::new()
         .memory_limit(2 * 1024 * 1024 * 1024) // 2GB
         .num_threads(8)
         .enable_console_log(true)
@@ -134,7 +134,7 @@ fn main() -> zvec::Result<()> {
 
     // Scenario 3: Balanced configuration
     println!("\nScenario 3: Balanced Configuration");
-    let balanced_config = ConfigDataBuilder::new()
+    let balanced_config = ConfigBuilder::new()
         .memory_limit(512 * 1024 * 1024) // 512MB
         .num_threads(4)
         .enable_console_log(false)

@@ -13,9 +13,9 @@
 //!     initialize(None)?;
 //!
 //!     let schema = CollectionSchema::builder("example")
-//!         .add_field(FieldSchema::new("id", DataType::String, false, 0))
+//!         .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
 //!         .add_vector_field("embedding", DataType::VectorFp32, 4,
-//!             IndexParams::hnsw(MetricType::Cosine, 16, 200))
+//!             IndexParams::hnsw(MetricType::Cosine, 16, 200)?)
 //!         .build()?;
 //!
 //!     let collection = Collection::create_and_open("./data", &schema, None)?;
@@ -32,7 +32,6 @@
 //!         println!("PK={} Score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
 //!     }
 //!
-//!     shutdown()?;
 //!     Ok(())
 //! }
 //! ```
@@ -45,12 +44,15 @@ pub mod query;
 pub mod schema;
 pub mod types;
 
-pub use collection::{Collection, CollectionOptions, CollectionStats, WriteResult};
-pub use config::{initialize, is_initialized, shutdown, version, ConfigData, ConfigDataBuilder};
+pub use collection::{
+    Collection, CollectionOptions, CollectionStats, DocWriteResult, IndexStat, WriteResult,
+};
+pub use config::{initialize, is_initialized, shutdown, version, ConfigBuilder};
 pub use doc::Doc;
 pub use error::{Error, ErrorCode, Result};
 pub use query::{
-    FlatQueryParams, GroupByVectorQuery, HnswQueryParams, IvfQueryParams, VectorQuery,
+    FlatQueryParams, Fts, FtsQueryParams, GroupByVectorQuery, HnswQueryParams, IvfQueryParams,
+    VectorQuery,
 };
 pub use schema::{CollectionSchema, FieldSchema, IndexParams};
 pub use types::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};
@@ -65,8 +67,8 @@ pub use zvec_sys as sys;
 /// ```
 pub mod prelude {
     pub use crate::{
-        initialize, is_initialized, shutdown, version, Collection, CollectionOptions,
-        CollectionSchema, CollectionStats, ConfigData, ConfigDataBuilder, DataType, Doc, Error,
+        initialize, is_initialized, version, Collection, CollectionOptions,
+        CollectionSchema, CollectionStats, ConfigBuilder, DataType, Doc, Error, IndexStat,
         ErrorCode, FieldSchema, IndexParams, MetricType, QuantizeType, Result, VectorQuery,
         WriteResult,
     };

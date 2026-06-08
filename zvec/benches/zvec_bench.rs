@@ -21,13 +21,13 @@ fn ensure_initialized() {
 fn create_bench_collection(parent_dir: &std::path::Path, dim: u32) -> Collection {
     let dir = parent_dir.join("zvec_data");
     let schema = CollectionSchema::builder("bench_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("category", DataType::String, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0).unwrap())
+        .add_field(FieldSchema::new("category", DataType::String, true, 0).unwrap())
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             dim,
-            IndexParams::hnsw(MetricType::Cosine, 16, 200),
+            IndexParams::hnsw(MetricType::Cosine, 16, 200).unwrap(),
         )
         .build()
         .expect("failed to build schema");
@@ -246,12 +246,12 @@ fn bench_schema_creation(criterion: &mut Criterion) {
     criterion.bench_function("schema_builder_simple", |bencher| {
         bencher.iter(|| {
             let schema = CollectionSchema::builder("bench")
-                .add_field(FieldSchema::new("id", DataType::String, false, 0))
+                .add_field(FieldSchema::new("id", DataType::String, false, 0).unwrap())
                 .add_vector_field(
                     "embedding",
                     DataType::VectorFp32,
                     128,
-                    IndexParams::hnsw(MetricType::Cosine, 16, 200),
+                    IndexParams::hnsw(MetricType::Cosine, 16, 200).unwrap(),
                 )
                 .build()
                 .unwrap();
@@ -262,22 +262,22 @@ fn bench_schema_creation(criterion: &mut Criterion) {
     criterion.bench_function("schema_builder_complex", |bencher| {
         bencher.iter(|| {
             let schema = CollectionSchema::builder("bench")
-                .add_field(FieldSchema::new("id", DataType::String, false, 0))
-                .add_field(FieldSchema::new("name", DataType::String, true, 0))
-                .add_field(FieldSchema::new("score", DataType::Float, true, 0))
-                .add_field(FieldSchema::new("count", DataType::Int64, true, 0))
-                .add_field(FieldSchema::new("flag", DataType::Bool, true, 0))
+                .add_field(FieldSchema::new("id", DataType::String, false, 0).unwrap())
+                .add_field(FieldSchema::new("name", DataType::String, true, 0).unwrap())
+                .add_field(FieldSchema::new("score", DataType::Float, true, 0).unwrap())
+                .add_field(FieldSchema::new("count", DataType::Int64, true, 0).unwrap())
+                .add_field(FieldSchema::new("flag", DataType::Bool, true, 0).unwrap())
                 .add_vector_field(
                     "embedding",
                     DataType::VectorFp32,
                     128,
-                    IndexParams::hnsw(MetricType::Cosine, 16, 200),
+                    IndexParams::hnsw(MetricType::Cosine, 16, 200).unwrap(),
                 )
                 .add_vector_field(
                     "embedding2",
                     DataType::VectorFp32,
                     64,
-                    IndexParams::flat(MetricType::L2),
+                    IndexParams::flat(MetricType::L2).unwrap(),
                 )
                 .build()
                 .unwrap();

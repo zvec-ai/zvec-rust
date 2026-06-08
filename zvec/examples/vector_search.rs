@@ -8,15 +8,15 @@ fn main() -> zvec::Result<()> {
 
     // Create a simple schema for demonstration
     let schema = CollectionSchema::builder("search_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("title", DataType::String, true, 0))
-        .add_field(FieldSchema::new("category", DataType::String, true, 0))
-        .add_field(FieldSchema::new("price", DataType::Float, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_field(FieldSchema::new("title", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("category", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("price", DataType::Float, true, 0)?)
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::hnsw(MetricType::Cosine, 16, 100),
+            IndexParams::hnsw(MetricType::Cosine, 16, 100)?,
         )
         .build()?;
 
@@ -122,13 +122,9 @@ fn main() -> zvec::Result<()> {
         let score = result.get_score();
 
         // Get output field values
-        let title = result
-            .get_string("title")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let category = result
-            .get_string("category")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let price = result.get_f32("price").unwrap_or(0.0);
+        let title = result.get_string("title")?.unwrap_or_default();
+        let category = result.get_string("category")?.unwrap_or_default();
+        let price = result.get_f32("price")?.unwrap_or(0.0);
 
         println!(
             "  #{}: pk={}, similarity={:.4}, title='{}', category='{}', price={:.2}",
@@ -185,16 +181,10 @@ fn main() -> zvec::Result<()> {
         let pk = result.get_pk().unwrap_or("<unknown>");
         let score = result.get_score();
 
-        let id = result
-            .get_string("id")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let title = result
-            .get_string("title")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let category = result
-            .get_string("category")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let price = result.get_f32("price").unwrap_or(0.0);
+        let id = result.get_string("id")?.unwrap_or_default();
+        let title = result.get_string("title")?.unwrap_or_default();
+        let category = result.get_string("category")?.unwrap_or_default();
+        let price = result.get_f32("price")?.unwrap_or(0.0);
 
         println!("  Result #{}:", i + 1);
         println!("    Primary Key: {}", pk);

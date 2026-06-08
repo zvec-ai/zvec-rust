@@ -90,6 +90,124 @@ impl Drop for FlatQueryParams {
     }
 }
 
+/// FTS-specific query parameters controlling the default boolean operator.
+pub struct FtsQueryParams {
+    pub(crate) handle: *mut zvec_sys::zvec_fts_query_params_t,
+}
+
+impl FtsQueryParams {
+    /// Creates new FTS query parameters.
+    ///
+    /// `default_operator` sets the boolean operator for adjacent bare terms
+    /// ("OR" or "AND", case-insensitive). Pass `None` to use the library default.
+    pub fn new(default_operator: Option<&str>) -> Result<Self> {
+        let c_op = default_operator.map(to_cstring).transpose()?;
+        let handle = unsafe {
+            zvec_sys::zvec_query_params_fts_create(
+                c_op.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+            )
+        };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create FTS query params".into(),
+            });
+        }
+        Ok(FtsQueryParams { handle })
+    }
+
+    /// Sets the default boolean operator.
+    pub fn set_default_operator(&mut self, op: &str) -> Result<()> {
+        let c_op = to_cstring(op)?;
+        check_error(unsafe {
+            zvec_sys::zvec_query_params_fts_set_default_operator(self.handle, c_op.as_ptr())
+        })
+    }
+
+    /// Returns the default boolean operator.
+    pub fn default_operator(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_query_params_fts_get_default_operator(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
+impl Drop for FtsQueryParams {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { zvec_sys::zvec_query_params_fts_destroy(self.handle) };
+        }
+    }
+}
+
+/// FTS query payload holding the query expression and match string.
+///
+/// - `query_string`: a boolean / advanced query expression
+/// - `match_string`: a natural-language match string
+pub struct Fts {
+    pub(crate) handle: *mut zvec_sys::zvec_fts_t,
+}
+
+impl Fts {
+    /// Creates a new FTS query payload.
+    pub fn new() -> Result<Self> {
+        let handle = unsafe { zvec_sys::zvec_fts_create() };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create FTS payload".into(),
+            });
+        }
+        Ok(Fts { handle })
+    }
+
+    /// Sets the boolean / advanced query expression.
+    pub fn set_query_string(&mut self, query: &str) -> Result<()> {
+        let c = to_cstring(query)?;
+        check_error(unsafe { zvec_sys::zvec_fts_set_query_string(self.handle, c.as_ptr()) })
+    }
+
+    /// Sets the natural-language match string.
+    pub fn set_match_string(&mut self, match_str: &str) -> Result<()> {
+        let c = to_cstring(match_str)?;
+        check_error(unsafe { zvec_sys::zvec_fts_set_match_string(self.handle, c.as_ptr()) })
+    }
+
+    /// Returns the query expression, or `None` if not set.
+    pub fn query_string(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_fts_get_query_string(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+
+    /// Returns the match string, or `None` if not set.
+    pub fn match_string(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_fts_get_match_string(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
+impl Drop for Fts {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { zvec_sys::zvec_fts_destroy(self.handle) };
+        }
+    }
+}
+
 /// A vector similarity search query.
 pub struct VectorQuery {
     pub(crate) handle: *mut zvec_sys::zvec_vector_query_t,
@@ -207,6 +325,20 @@ impl VectorQuery {
         params.handle = std::ptr::null_mut();
         Ok(())
     }
+
+    /// Sets FTS query parameters (takes ownership on success).
+    pub fn set_fts_params(&mut self, mut params: FtsQueryParams) -> Result<()> {
+        check_error(unsafe {
+            zvec_sys::zvec_vector_query_set_fts_params(self.handle, params.handle)
+        })?;
+        params.handle = std::ptr::null_mut();
+        Ok(())
+    }
+
+    /// Sets FTS payload (payload is copied, caller retains ownership).
+    pub fn set_fts(&mut self, fts: &Fts) -> Result<()> {
+        check_error(unsafe { zvec_sys::zvec_vector_query_set_fts(self.handle, fts.handle) })
+    }
 }
 
 impl Drop for VectorQuery {
@@ -226,6 +358,8 @@ pub struct VectorQueryBuilder {
     include_vector: Option<bool>,
     include_doc_id: Option<bool>,
     output_fields: Option<Vec<String>>,
+    fts_query_string: Option<String>,
+    fts_match_string: Option<String>,
 }
 
 impl VectorQueryBuilder {
@@ -238,6 +372,8 @@ impl VectorQueryBuilder {
             include_vector: None,
             include_doc_id: None,
             output_fields: None,
+            fts_query_string: None,
+            fts_match_string: None,
         }
     }
 
@@ -283,6 +419,18 @@ impl VectorQueryBuilder {
         self
     }
 
+    /// Sets the FTS boolean / advanced query expression.
+    pub fn fts_query_string(mut self, query: &str) -> Self {
+        self.fts_query_string = Some(query.to_string());
+        self
+    }
+
+    /// Sets the FTS natural-language match string.
+    pub fn fts_match_string(mut self, match_str: &str) -> Self {
+        self.fts_match_string = Some(match_str.to_string());
+        self
+    }
+
     /// Builds the vector query.
     pub fn build(self) -> Result<VectorQuery> {
         let field_name = self.field_name.ok_or_else(|| Error {
@@ -308,6 +456,16 @@ impl VectorQueryBuilder {
         if let Some(fields) = &self.output_fields {
             let field_refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
             query.set_output_fields(&field_refs)?;
+        }
+        if self.fts_query_string.is_some() || self.fts_match_string.is_some() {
+            let mut fts = Fts::new()?;
+            if let Some(qs) = &self.fts_query_string {
+                fts.set_query_string(qs)?;
+            }
+            if let Some(ms) = &self.fts_match_string {
+                fts.set_match_string(ms)?;
+            }
+            query.set_fts(&fts)?;
         }
 
         Ok(query)

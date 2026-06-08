@@ -69,12 +69,33 @@ impl Drop for CollectionOptions {
     }
 }
 
+/// Statistics about a single index in a collection.
+#[derive(Debug, Clone)]
+pub struct IndexStat {
+    pub name: String,
+    pub completeness: f32,
+}
+
 /// Statistics about a collection.
 #[derive(Debug, Clone)]
 pub struct CollectionStats {
     pub doc_count: u64,
-    pub index_names: Vec<String>,
-    pub index_completeness: Vec<f32>,
+    pub indexes: Vec<IndexStat>,
+}
+
+/// Per-document result of a write operation.
+#[derive(Debug, Clone)]
+pub struct DocWriteResult {
+    pub success: bool,
+    pub code: ErrorCode,
+    pub message: String,
+}
+
+impl DocWriteResult {
+    /// Returns `true` if this individual write succeeded.
+    pub fn is_success(&self) -> bool {
+        self.success
+    }
 }
 
 /// Result of a write operation (insert/update/upsert/delete).
@@ -82,6 +103,7 @@ pub struct CollectionStats {
 pub struct WriteResult {
     pub success_count: u64,
     pub error_count: u64,
+    pub results: Vec<DocWriteResult>,
 }
 
 /// A zvec collection for storing and querying vector data.
@@ -171,8 +193,7 @@ impl Collection {
         let doc_count = unsafe { zvec_sys::zvec_collection_stats_get_doc_count(stats_handle) };
         let index_count = unsafe { zvec_sys::zvec_collection_stats_get_index_count(stats_handle) };
 
-        let mut index_names = Vec::with_capacity(index_count);
-        let mut index_completeness = Vec::with_capacity(index_count);
+        let mut indexes = Vec::with_capacity(index_count);
 
         for i in 0..index_count {
             let name_ptr =
@@ -182,19 +203,17 @@ impl Collection {
             } else {
                 unsafe { CStr::from_ptr(name_ptr).to_string_lossy().into_owned() }
             };
-            index_names.push(name);
 
             let completeness =
                 unsafe { zvec_sys::zvec_collection_stats_get_index_completeness(stats_handle, i) };
-            index_completeness.push(completeness);
+            indexes.push(IndexStat { name, completeness });
         }
 
         unsafe { zvec_sys::zvec_collection_stats_destroy(stats_handle) };
 
         Ok(CollectionStats {
             doc_count,
-            index_names,
-            index_completeness,
+            indexes,
         })
     }
 
@@ -206,69 +225,60 @@ impl Collection {
     pub fn insert(&self, docs: &[&Doc]) -> Result<WriteResult> {
         let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut success_count: usize = 0;
-        let mut error_count: usize = 0;
+        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_insert(
+            zvec_sys::zvec_collection_insert_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
-                &mut success_count,
-                &mut error_count,
+                &mut results,
+                &mut result_count,
             )
         })?;
 
-        Ok(WriteResult {
-            success_count: success_count as u64,
-            error_count: error_count as u64,
-        })
+        Ok(collect_write_results(results, result_count))
     }
 
     /// Updates documents in the collection.
     pub fn update(&self, docs: &[&Doc]) -> Result<WriteResult> {
         let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut success_count: usize = 0;
-        let mut error_count: usize = 0;
+        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_update(
+            zvec_sys::zvec_collection_update_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
-                &mut success_count,
-                &mut error_count,
+                &mut results,
+                &mut result_count,
             )
         })?;
 
-        Ok(WriteResult {
-            success_count: success_count as u64,
-            error_count: error_count as u64,
-        })
+        Ok(collect_write_results(results, result_count))
     }
 
     /// Inserts or updates documents (upsert).
     pub fn upsert(&self, docs: &[&Doc]) -> Result<WriteResult> {
         let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut success_count: usize = 0;
-        let mut error_count: usize = 0;
+        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_upsert(
+            zvec_sys::zvec_collection_upsert_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
-                &mut success_count,
-                &mut error_count,
+                &mut results,
+                &mut result_count,
             )
         })?;
 
-        Ok(WriteResult {
-            success_count: success_count as u64,
-            error_count: error_count as u64,
-        })
+        Ok(collect_write_results(results, result_count))
     }
 
     /// Deletes documents by primary keys.
@@ -278,23 +288,20 @@ impl Collection {
             .map(|pk| to_cstring(pk))
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_pks.iter().map(|pk| pk.as_ptr()).collect();
-        let mut success_count: usize = 0;
-        let mut error_count: usize = 0;
+        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_delete(
+            zvec_sys::zvec_collection_delete_with_results(
                 self.handle,
                 c_ptrs.as_ptr(),
                 c_ptrs.len(),
-                &mut success_count,
-                &mut error_count,
+                &mut results,
+                &mut result_count,
             )
         })?;
 
-        Ok(WriteResult {
-            success_count: success_count as u64,
-            error_count: error_count as u64,
-        })
+        Ok(collect_write_results(results, result_count))
     }
 
     /// Deletes documents matching a filter expression.
@@ -425,6 +432,45 @@ impl Drop for Collection {
 // See: https://github.com/alibaba/zvec — C-API thread-safety guarantees.
 unsafe impl Send for Collection {}
 unsafe impl Sync for Collection {}
+
+/// Parses a C array of `zvec_write_result_t` into a `WriteResult`.
+fn collect_write_results(
+    results: *mut zvec_sys::zvec_write_result_t,
+    count: usize,
+) -> WriteResult {
+    let mut doc_results = Vec::with_capacity(count);
+    let mut success_count: u64 = 0;
+    let mut error_count: u64 = 0;
+
+    if !results.is_null() && count > 0 {
+        for i in 0..count {
+            let wr = unsafe { &*results.add(i) };
+            let is_ok = wr.code == zvec_sys::ZVEC_OK;
+            let message = if wr.message.is_null() {
+                String::new()
+            } else {
+                unsafe { CStr::from_ptr(wr.message).to_string_lossy().into_owned() }
+            };
+            if is_ok {
+                success_count += 1;
+            } else {
+                error_count += 1;
+            }
+            doc_results.push(DocWriteResult {
+                success: is_ok,
+                code: ErrorCode::from(wr.code),
+                message,
+            });
+        }
+        unsafe { zvec_sys::zvec_write_results_free(results, count) };
+    }
+
+    WriteResult {
+        success_count,
+        error_count,
+        results: doc_results,
+    }
+}
 
 /// Collects document pointers from a C array into a Vec<Doc>.
 ///

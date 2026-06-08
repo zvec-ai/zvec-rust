@@ -9,14 +9,14 @@ fn main() -> zvec::Result<()> {
 
     // Define collection schema using the builder pattern
     let schema = CollectionSchema::builder("example_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("category", DataType::String, true, 0))
-        .add_field(FieldSchema::new("score", DataType::Float, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_field(FieldSchema::new("category", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("score", DataType::Float, true, 0)?)
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::hnsw(MetricType::Cosine, 16, 200),
+            IndexParams::hnsw(MetricType::Cosine, 16, 200)?,
         )
         .build()?;
 
@@ -79,8 +79,12 @@ fn main() -> zvec::Result<()> {
     let stats = collection.stats()?;
     println!("\nCollection stats:");
     println!("  doc_count: {}", stats.doc_count);
-    for (name, completeness) in stats.index_names.iter().zip(&stats.index_completeness) {
-        println!("  index '{}': {:.1}% complete", name, completeness * 100.0);
+    for index in &stats.indexes {
+        println!(
+            "  index '{}': {:.1}% complete",
+            index.name,
+            index.completeness * 100.0
+        );
     }
 
     // Delete documents
