@@ -211,10 +211,7 @@ impl Collection {
 
         unsafe { zvec_sys::zvec_collection_stats_destroy(stats_handle) };
 
-        Ok(CollectionStats {
-            doc_count,
-            indexes,
-        })
+        Ok(CollectionStats { doc_count, indexes })
     }
 
     // =========================================================================
@@ -434,10 +431,7 @@ unsafe impl Send for Collection {}
 unsafe impl Sync for Collection {}
 
 /// Parses a C array of `zvec_write_result_t` into a `WriteResult`.
-fn collect_write_results(
-    results: *mut zvec_sys::zvec_write_result_t,
-    count: usize,
-) -> WriteResult {
+fn collect_write_results(results: *mut zvec_sys::zvec_write_result_t, count: usize) -> WriteResult {
     let mut doc_results = Vec::with_capacity(count);
     let mut success_count: u64 = 0;
     let mut error_count: u64 = 0;

@@ -67,9 +67,8 @@ pub use zvec_sys as sys;
 /// ```
 pub mod prelude {
     pub use crate::{
-        initialize, is_initialized, version, Collection, CollectionOptions,
-        CollectionSchema, CollectionStats, ConfigBuilder, DataType, Doc, Error, IndexStat,
-        ErrorCode, FieldSchema, IndexParams, MetricType, QuantizeType, Result, VectorQuery,
-        WriteResult,
+        initialize, is_initialized, version, Collection, CollectionOptions, CollectionSchema,
+        CollectionStats, ConfigBuilder, DataType, Doc, Error, ErrorCode, FieldSchema, IndexParams,
+        IndexStat, MetricType, QuantizeType, Result, VectorQuery, WriteResult,
     };
 }

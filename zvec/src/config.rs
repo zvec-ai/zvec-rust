@@ -137,7 +137,6 @@ impl ConfigData {
         }
         result
     }
-
 }
 
 impl Drop for ConfigData {

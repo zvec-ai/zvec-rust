@@ -1168,9 +1168,7 @@ extern "C" {
         query: *mut zvec_vector_query_t,
         fts: *const zvec_fts_t,
     ) -> zvec_error_code_t;
-    pub fn zvec_vector_query_get_fts(
-        query: *const zvec_vector_query_t,
-    ) -> *const zvec_fts_t;
+    pub fn zvec_vector_query_get_fts(query: *const zvec_vector_query_t) -> *const zvec_fts_t;
 
     // -------------------------------------------------------------------------
     // Group By Vector Query

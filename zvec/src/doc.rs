@@ -370,7 +370,11 @@ impl Doc {
     // Field getters
     // =========================================================================
 
-    fn get_basic_field<T: Copy + Default>(&self, name: &str, data_type: DataType) -> Result<Option<T>> {
+    fn get_basic_field<T: Copy + Default>(
+        &self,
+        name: &str,
+        data_type: DataType,
+    ) -> Result<Option<T>> {
         if !self.has_field(name) || self.is_field_null(name) {
             return Ok(None);
         }
@@ -388,7 +392,11 @@ impl Doc {
         Ok(Some(value))
     }
 
-    fn get_pointer_field(&self, name: &str, data_type: DataType) -> Result<Option<(*const c_void, usize)>> {
+    fn get_pointer_field(
+        &self,
+        name: &str,
+        data_type: DataType,
+    ) -> Result<Option<(*const c_void, usize)>> {
         let c_name = to_cstring(name)?;
         let mut value_ptr: *const c_void = std::ptr::null();
         let mut value_size: usize = 0;
@@ -415,7 +423,10 @@ impl Doc {
         if elem_size > 1 && size % elem_size != 0 {
             return Err(Error {
                 code: ErrorCode::InternalError,
-                message: format!("data size {} is not aligned to element size {}", size, elem_size),
+                message: format!(
+                    "data size {} is not aligned to element size {}",
+                    size, elem_size
+                ),
             });
         }
         let count = size / elem_size;

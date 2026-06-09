@@ -28,8 +28,15 @@ impl IndexParams {
                     message: "failed to create HNSW index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32))?;
-            check_error(zvec_sys::zvec_index_params_set_hnsw_params(handle, m, ef_construction))?;
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+                handle,
+                m,
+                ef_construction,
+            ))?;
             Ok(IndexParams {
                 handle,
                 owned: true,
@@ -52,9 +59,19 @@ impl IndexParams {
                     message: "failed to create HNSW index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32))?;
-            check_error(zvec_sys::zvec_index_params_set_hnsw_params(handle, m, ef_construction))?;
-            check_error(zvec_sys::zvec_index_params_set_quantize_type(handle, quantize as u32))?;
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+                handle,
+                m,
+                ef_construction,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_quantize_type(
+                handle,
+                quantize as u32,
+            ))?;
             Ok(IndexParams {
                 handle,
                 owned: true,
@@ -72,8 +89,13 @@ impl IndexParams {
                     message: "failed to create IVF index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32))?;
-            check_error(zvec_sys::zvec_index_params_set_ivf_params(handle, n_list, n_iters, use_soar))?;
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_ivf_params(
+                handle, n_list, n_iters, use_soar,
+            ))?;
             Ok(IndexParams {
                 handle,
                 owned: true,
@@ -91,7 +113,10 @@ impl IndexParams {
                     message: "failed to create Flat index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32))?;
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
             Ok(IndexParams {
                 handle,
                 owned: true,
@@ -624,7 +649,8 @@ mod tests {
 
     #[test]
     fn test_index_params_hnsw_with_quantize() {
-        let params = IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Int8).unwrap();
+        let params =
+            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Int8).unwrap();
         assert_eq!(params.index_type(), IndexType::Hnsw);
         assert_eq!(params.metric_type(), MetricType::L2);
         assert_eq!(params.quantize_type(), QuantizeType::Int8);
@@ -704,7 +730,8 @@ mod tests {
     #[test]
     fn test_index_params_set_quantize_type() {
         let mut params =
-            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Undefined).unwrap();
+            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Undefined)
+                .unwrap();
         params.set_quantize_type(QuantizeType::Int8).unwrap();
         assert_eq!(params.quantize_type(), QuantizeType::Int8);
     }
