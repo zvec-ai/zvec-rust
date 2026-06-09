@@ -105,13 +105,17 @@ jobs:
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
           git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
           cmake --build . --config Release --parallel
         shell: bash
 
@@ -219,13 +223,17 @@ jobs:
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
           git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
           mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
           cmake --build . --config Release --parallel
         shell: bash
 
