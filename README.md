@@ -50,7 +50,7 @@ Just add the dependency — the build script handles everything:
 
 ```toml
 [dependencies]
-zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.3.1" }
+zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0" }
 ```
 
 On first build, `build.rs` will automatically download the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and set up the library path via `rpath`.
