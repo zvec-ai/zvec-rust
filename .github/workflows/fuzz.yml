@@ -58,6 +58,10 @@ jobs:
           restore-keys: |
             fuzz-corpus-${{ matrix.target }}-
 
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libaio-dev
+        shell: bash
+
       - name: Clone and build zvec C library
         run: |
           git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec

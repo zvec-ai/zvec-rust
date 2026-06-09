@@ -83,6 +83,11 @@ jobs:
           restore-keys: |
             ${{ matrix.platform }}-cargo-
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libaio-dev
+        shell: bash
+
       - name: Clone and build zvec C library (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -191,6 +196,11 @@ jobs:
           key: ${{ matrix.platform }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ matrix.platform }}-cargo-
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libaio-dev
+        shell: bash
 
       - name: Clone and build zvec C library (Unix)
         if: runner.os != 'Windows'
