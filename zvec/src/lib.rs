@@ -26,7 +26,7 @@
 //!     doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3, 0.4])?;
 //!     collection.insert(&[&doc])?;
 //!
-//!     let query = VectorQuery::new("embedding", &[0.4, 0.3, 0.3, 0.1], 10)?;
+//!     let query = SearchQuery::new("embedding", &[0.4, 0.3, 0.3, 0.1], 10)?;
 //!     let results = collection.query(&query)?;
 //!     for result in &results {
 //!         println!("PK={} Score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
@@ -40,6 +40,7 @@ pub mod collection;
 pub mod config;
 pub mod doc;
 pub mod error;
+pub mod multi_query;
 pub mod query;
 pub mod schema;
 pub mod types;
@@ -50,9 +51,10 @@ pub use collection::{
 pub use config::{initialize, is_initialized, shutdown, version, ConfigBuilder};
 pub use doc::Doc;
 pub use error::{Error, ErrorCode, Result};
+pub use multi_query::{MultiQuery, SubQuery};
 pub use query::{
-    FlatQueryParams, Fts, FtsQueryParams, GroupByVectorQuery, HnswQueryParams, IvfQueryParams,
-    VectorQuery,
+    FlatQueryParams, Fts, FtsQueryParams, GroupBySearchQuery, HnswQueryParams, IvfQueryParams,
+    SearchQuery, SearchQueryBuilder,
 };
 pub use schema::{CollectionSchema, FieldSchema, IndexParams};
 pub use types::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};
@@ -69,6 +71,7 @@ pub mod prelude {
     pub use crate::{
         initialize, is_initialized, version, Collection, CollectionOptions, CollectionSchema,
         CollectionStats, ConfigBuilder, DataType, Doc, Error, ErrorCode, FieldSchema, IndexParams,
-        IndexStat, MetricType, QuantizeType, Result, VectorQuery, WriteResult,
+        IndexStat, MetricType, MultiQuery, QuantizeType, Result, SearchQuery, SubQuery,
+        WriteResult,
     };
 }

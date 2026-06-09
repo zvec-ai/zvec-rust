@@ -93,7 +93,7 @@ fn main() -> zvec::Result<()> {
 
     // Query the collection
     let query_vector = [0.1, 0.2, 0.3, 0.4];
-    let query = VectorQuery::new("embedding", &query_vector, 1)?;
+    let query = SearchQuery::new("embedding", &query_vector, 1)?;
     let results = collection.query(&query)?;
     println!("Query executed, found {} results", results.len());
 

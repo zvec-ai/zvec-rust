@@ -57,7 +57,7 @@ fn main() -> zvec::Result<()> {
 
     // Vector similarity search
     let query_vector = [0.5, 0.6, 0.7, 0.8];
-    let query = VectorQuery::new("embedding", &query_vector, 3)?;
+    let query = SearchQuery::new("embedding", &query_vector, 3)?;
     let results = collection.query(&query)?;
 
     println!("\nVector search results (top 3):");

@@ -379,7 +379,7 @@ fn test_collection_vector_query() {
     insert_test_docs(&collection, 10);
 
     let query_vec = [0.2, 0.3, 0.4, 0.5];
-    let query = VectorQuery::new("embedding", &query_vec, 3).unwrap();
+    let query = SearchQuery::new("embedding", &query_vec, 3).unwrap();
     let results = collection.query(&query).unwrap();
 
     assert!(results.len() <= 3);
@@ -399,7 +399,7 @@ fn test_collection_vector_query_builder() {
     insert_test_docs(&collection, 10);
 
     let query_vec = [0.2, 0.3, 0.4, 0.5];
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vec)
         .topk(5)
@@ -548,7 +548,7 @@ fn test_vector_query_with_hnsw_params() {
 
     let query_vec = [0.2, 0.3, 0.4, 0.5];
     let hnsw_params = HnswQueryParams::new(50, 0.0, false, false);
-    let mut query = VectorQuery::new("embedding", &query_vec, 5).unwrap();
+    let mut query = SearchQuery::new("embedding", &query_vec, 5).unwrap();
     query.set_hnsw_params(hnsw_params).unwrap();
 
     let results = collection.query(&query).unwrap();
@@ -607,7 +607,7 @@ fn test_doc_has_field_nonexistent() {
 fn test_vector_query_builder_missing_field_name() {
     ensure_initialized();
 
-    let result = VectorQuery::builder()
+    let result = SearchQuery::builder()
         .vector(&[0.1, 0.2, 0.3])
         .topk(10)
         .build();
@@ -622,7 +622,7 @@ fn test_vector_query_builder_missing_field_name() {
 fn test_vector_query_builder_missing_vector() {
     ensure_initialized();
 
-    let result = VectorQuery::builder()
+    let result = SearchQuery::builder()
         .field_name("embedding")
         .topk(10)
         .build();
@@ -743,7 +743,7 @@ fn test_filter_expression() {
     let query_vec = [0.2, 0.3, 0.4, 0.5];
 
     // Verify that a filter query with valid SQL syntax executes without error
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vec)
         .topk(50)
@@ -763,7 +763,7 @@ fn test_filter_expression() {
     }
 
     // Also verify that an invalid filter returns an error
-    let bad_query = VectorQuery::builder()
+    let bad_query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vec)
         .topk(5)
@@ -832,7 +832,7 @@ fn test_output_fields() {
     insert_test_docs(&collection, 5);
 
     let query_vec = [0.2, 0.3, 0.4, 0.5];
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vec)
         .topk(3)
@@ -866,4 +866,170 @@ fn test_u32_u64_fields() {
     // We can only verify that add operations succeed and the fields exist
     assert!(doc.has_field("u32_field"));
     assert!(doc.has_field("u64_field"));
+}
+
+// -----------------------------------------------------------------------------
+// 11. MultiQuery Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+fn test_multi_query_basic_setters() {
+    ensure_initialized();
+
+    let mut mq = MultiQuery::new().unwrap();
+    mq.set_topk(15).unwrap();
+    assert_eq!(mq.topk(), 15);
+
+    mq.set_include_vector(true).unwrap();
+    assert!(mq.include_vector());
+
+    mq.set_filter("category = 'even'").unwrap();
+    mq.set_output_fields(&["id", "category"]).unwrap();
+}
+
+#[test]
+fn test_multi_query_rerank_strategies() {
+    ensure_initialized();
+
+    let mut mq = MultiQuery::new().unwrap();
+    mq.set_rerank_rrf(60).unwrap();
+
+    let mut mq2 = MultiQuery::new().unwrap();
+    mq2.set_rerank_weighted(&[0.7, 0.3]).unwrap();
+
+    let mut mq3 = MultiQuery::new().unwrap();
+    let err = mq3.set_rerank_weighted(&[]).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+}
+
+#[test]
+fn test_sub_query_setters() {
+    ensure_initialized();
+
+    let mut sub = SubQuery::new().unwrap();
+    sub.set_field_name("embedding").unwrap();
+    sub.set_num_candidates(50).unwrap();
+    assert_eq!(sub.num_candidates(), 50);
+
+    sub.set_query_vector(&[0.1, 0.2, 0.3, 0.4]).unwrap();
+
+    // Empty vector should fail
+    let mut sub2 = SubQuery::new().unwrap();
+    let err = sub2.set_query_vector(&[]).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+}
+
+#[test]
+fn test_sub_query_sparse_vector_validation() {
+    ensure_initialized();
+
+    let mut sub = SubQuery::new().unwrap();
+    // Mismatched lengths
+    let err = sub.set_sparse_vector(&[0, 1], &[0.1]).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+    // Empty
+    let err = sub.set_sparse_vector(&[], &[]).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+    // Valid
+    sub.set_sparse_vector(&[0, 5, 10], &[0.1, 0.5, 0.9]).unwrap();
+}
+
+#[test]
+fn test_sub_query_hnsw_params_ownership_transfer() {
+    ensure_initialized();
+
+    let mut sub = SubQuery::new().unwrap();
+    let params = HnswQueryParams::new(100, 0.0, false, false);
+    // After transfer the original wrapper's handle is null and Drop is a no-op.
+    sub.set_hnsw_params(params).unwrap();
+}
+
+#[test]
+fn test_multi_query_add_sub_query_increments_count() {
+    ensure_initialized();
+
+    let mut mq = MultiQuery::new().unwrap();
+    let mut sub = SubQuery::new().unwrap();
+    sub.set_field_name("embedding").unwrap();
+    sub.set_num_candidates(20).unwrap();
+    sub.set_query_vector(&[0.1, 0.2, 0.3, 0.4]).unwrap();
+
+    mq.add_sub_query(&sub).unwrap();
+    assert_eq!(mq.sub_query_count(), 1);
+
+    // sub still owns its handle (copy semantics)
+    mq.add_sub_query(&sub).unwrap();
+    assert_eq!(mq.sub_query_count(), 2);
+}
+
+#[test]
+fn test_collection_multi_query_end_to_end() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let collection = create_test_collection(tmp_dir.path());
+    insert_test_docs(&collection, 10);
+
+    // Build a multi-query with two sub-queries against the embedding field
+    // (MultiQuery requires at least 2 sub-queries).
+    let mut sub_a = SubQuery::new().unwrap();
+    sub_a.set_field_name("embedding").unwrap();
+    sub_a.set_num_candidates(20).unwrap();
+    sub_a.set_query_vector(&[0.2, 0.3, 0.4, 0.5]).unwrap();
+
+    let mut sub_b = SubQuery::new().unwrap();
+    sub_b.set_field_name("embedding").unwrap();
+    sub_b.set_num_candidates(20).unwrap();
+    sub_b.set_query_vector(&[0.5, 0.4, 0.3, 0.2]).unwrap();
+
+    let mut mq = MultiQuery::new().unwrap();
+    mq.set_topk(5).unwrap();
+    mq.set_rerank_rrf(60).unwrap();
+    mq.add_sub_query(&sub_a).unwrap();
+    mq.add_sub_query(&sub_b).unwrap();
+    assert_eq!(mq.sub_query_count(), 2);
+
+    let results = collection.multi_query(&mq).unwrap();
+    assert!(!results.is_empty(), "multi_query should return results");
+    assert!(results.len() <= 5);
+
+    for doc in &results {
+        let pk = doc.get_pk().unwrap_or("");
+        assert!(pk.starts_with("pk_"));
+    }
+}
+
+#[test]
+fn test_collection_multi_query_with_filter_and_output_fields() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let collection = create_test_collection(tmp_dir.path());
+    insert_test_docs(&collection, 10);
+
+    let mut sub_a = SubQuery::new().unwrap();
+    sub_a.set_field_name("embedding").unwrap();
+    sub_a.set_num_candidates(20).unwrap();
+    sub_a.set_query_vector(&[0.2, 0.3, 0.4, 0.5]).unwrap();
+
+    let mut sub_b = SubQuery::new().unwrap();
+    sub_b.set_field_name("embedding").unwrap();
+    sub_b.set_num_candidates(20).unwrap();
+    sub_b.set_query_vector(&[0.9, 0.8, 0.7, 0.6]).unwrap();
+
+    let mut mq = MultiQuery::new().unwrap();
+    mq.set_topk(5).unwrap();
+    mq.set_filter("category = 'even'").unwrap();
+    mq.set_output_fields(&["id", "category"]).unwrap();
+    mq.set_rerank_weighted(&[0.6, 0.4]).unwrap();
+    mq.add_sub_query(&sub_a).unwrap();
+    mq.add_sub_query(&sub_b).unwrap();
+
+    let results = collection.multi_query(&mq).unwrap();
+    for doc in &results {
+        assert!(doc.has_field("id"));
+        assert!(doc.has_field("category"));
+    }
 }

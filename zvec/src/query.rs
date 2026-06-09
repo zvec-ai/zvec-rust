@@ -209,26 +209,26 @@ impl Drop for Fts {
 }
 
 /// A vector similarity search query.
-pub struct VectorQuery {
+pub struct SearchQuery {
     pub(crate) handle: *mut zvec_sys::zvec_vector_query_t,
 }
 
-impl VectorQuery {
+impl SearchQuery {
     /// Returns the raw FFI handle.
     ///
     /// # Safety
-    /// The caller must not use the handle after the `VectorQuery` is dropped.
+    /// The caller must not use the handle after the `SearchQuery` is dropped.
     pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_vector_query_t {
         self.handle
     }
 
-    /// Creates a `VectorQuery` from a raw FFI handle.
+    /// Creates a `SearchQuery` from a raw FFI handle.
     ///
     /// # Safety
     /// The caller must ensure the handle is valid and was created by the zvec C API.
-    /// The `VectorQuery` takes ownership and will call `zvec_vector_query_destroy` on drop.
+    /// The `SearchQuery` takes ownership and will call `zvec_vector_query_destroy` on drop.
     pub unsafe fn from_raw(handle: *mut zvec_sys::zvec_vector_query_t) -> Self {
-        VectorQuery { handle }
+        SearchQuery { handle }
     }
 
     /// Creates a new vector query with the given field name, query vector, and topk.
@@ -242,7 +242,7 @@ impl VectorQuery {
         }
 
         let c_field = to_cstring(field_name)?;
-        let query = VectorQuery { handle };
+        let query = SearchQuery { handle };
 
         check_error(unsafe {
             zvec_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
@@ -259,9 +259,9 @@ impl VectorQuery {
         Ok(query)
     }
 
-    /// Returns a builder for constructing a vector query.
-    pub fn builder() -> VectorQueryBuilder {
-        VectorQueryBuilder::new()
+    /// Returns a builder for constructing a search query.
+    pub fn builder() -> SearchQueryBuilder {
+        SearchQueryBuilder::new()
     }
 
     /// Sets the filter expression.
@@ -341,7 +341,7 @@ impl VectorQuery {
     }
 }
 
-impl Drop for VectorQuery {
+impl Drop for SearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             unsafe { zvec_sys::zvec_vector_query_destroy(self.handle) };
@@ -349,8 +349,8 @@ impl Drop for VectorQuery {
     }
 }
 
-/// Builder for constructing a [`VectorQuery`].
-pub struct VectorQueryBuilder {
+/// Builder for constructing a [`SearchQuery`].
+pub struct SearchQueryBuilder {
     field_name: Option<String>,
     vector: Option<Vec<f32>>,
     topk: i32,
@@ -362,9 +362,9 @@ pub struct VectorQueryBuilder {
     fts_match_string: Option<String>,
 }
 
-impl VectorQueryBuilder {
+impl SearchQueryBuilder {
     fn new() -> Self {
-        VectorQueryBuilder {
+        SearchQueryBuilder {
             field_name: None,
             vector: None,
             topk: 10,
@@ -431,8 +431,8 @@ impl VectorQueryBuilder {
         self
     }
 
-    /// Builds the vector query.
-    pub fn build(self) -> Result<VectorQuery> {
+    /// Builds the search query.
+    pub fn build(self) -> Result<SearchQuery> {
         let field_name = self.field_name.ok_or_else(|| Error {
             code: ErrorCode::InvalidArgument,
             message: "field_name is required".into(),
@@ -442,7 +442,7 @@ impl VectorQueryBuilder {
             message: "vector is required".into(),
         })?;
 
-        let mut query = VectorQuery::new(&field_name, &vector, self.topk)?;
+        let mut query = SearchQuery::new(&field_name, &vector, self.topk)?;
 
         if let Some(filter) = &self.filter {
             query.set_filter(filter)?;
@@ -473,12 +473,12 @@ impl VectorQueryBuilder {
 }
 
 /// A grouped vector similarity search query.
-pub struct GroupByVectorQuery {
+pub struct GroupBySearchQuery {
     pub(crate) handle: *mut zvec_sys::zvec_group_by_vector_query_t,
 }
 
-impl GroupByVectorQuery {
-    /// Creates a new group-by vector query.
+impl GroupBySearchQuery {
+    /// Creates a new group-by search query.
     pub fn new(
         field_name: &str,
         group_by_field: &str,
@@ -520,7 +520,7 @@ impl GroupByVectorQuery {
             zvec_sys::zvec_group_by_vector_query_set_group_topk(handle, group_topk)
         })?;
 
-        Ok(GroupByVectorQuery { handle })
+        Ok(GroupBySearchQuery { handle })
     }
 
     /// Sets the filter expression.
@@ -585,7 +585,7 @@ impl GroupByVectorQuery {
     }
 }
 
-impl Drop for GroupByVectorQuery {
+impl Drop for GroupBySearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             unsafe { zvec_sys::zvec_group_by_vector_query_destroy(self.handle) };
@@ -599,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_default_values() {
-        let builder = VectorQueryBuilder::new();
+        let builder = SearchQueryBuilder::new();
         assert!(builder.field_name.is_none());
         assert!(builder.vector.is_none());
         assert_eq!(builder.topk, 10);
@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_setters() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0, 2.0, 3.0])
             .topk(5)
@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_build_missing_field_name() {
-        let builder = VectorQueryBuilder::new().vector(&[1.0, 2.0, 3.0]);
+        let builder = SearchQueryBuilder::new().vector(&[1.0, 2.0, 3.0]);
 
         let result = builder.build();
         assert!(result.is_err());
@@ -646,7 +646,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_build_missing_vector() {
-        let builder = VectorQueryBuilder::new().field_name("test_field");
+        let builder = SearchQueryBuilder::new().field_name("test_field");
 
         let result = builder.build();
         assert!(result.is_err());
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_builder_method() {
-        let builder = VectorQuery::builder();
+        let builder = SearchQuery::builder();
         assert!(builder.field_name.is_none());
         assert!(builder.vector.is_none());
         assert_eq!(builder.topk, 10);
@@ -666,7 +666,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_partial_setters() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0, 2.0])
             .filter("status = 'active'");
@@ -679,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_empty_vector() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[]);
         assert_eq!(builder.vector, Some(vec![]));
@@ -687,7 +687,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_empty_output_fields() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .output_fields(&[]);
@@ -696,7 +696,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_topk_zero() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .topk(0);
@@ -705,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_topk_negative() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .topk(-1);
@@ -714,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_overwrite_field_name() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("first_field")
             .field_name("second_field");
         assert_eq!(builder.field_name, Some("second_field".to_string()));
@@ -723,7 +723,7 @@ mod tests {
     #[test]
     fn test_vector_query_builder_large_vector() {
         let large_vector: Vec<f32> = (0..1024).map(|i| i as f32).collect();
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&large_vector);
         assert_eq!(builder.vector.as_ref().unwrap().len(), 1024);

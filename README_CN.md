@@ -116,7 +116,7 @@ fn main() -> zvec::Result<()> {
     collection.insert(&[&doc])?;
 
     // 向量相似度搜索
-    let query = VectorQuery::new("embedding", &vec![0.2; 128], 10)?;
+    let query = SearchQuery::new("embedding", &vec![0.2; 128], 10)?;
     let results = collection.query(&query)?;
     for result in &results {
         println!("pk={}, score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
@@ -197,10 +197,10 @@ let count = doc.get_i64("count")?;
 
 ```rust
 // 简单查询
-let query = VectorQuery::new("embedding", &query_vec, 10)?;
+let query = SearchQuery::new("embedding", &query_vec, 10)?;
 
 // Builder 模式 + 过滤器
-let query = VectorQuery::builder()
+let query = SearchQuery::builder()
     .field_name("embedding")
     .vector(&query_vec)
     .topk(10)

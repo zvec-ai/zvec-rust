@@ -3,7 +3,8 @@ use std::ptr;
 
 use crate::doc::Doc;
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
-use crate::query::VectorQuery;
+use crate::multi_query::MultiQuery;
+use crate::query::SearchQuery;
 use crate::schema::{CollectionSchema, FieldSchema, IndexParams};
 
 /// Options for creating or opening a collection.
@@ -314,12 +315,31 @@ impl Collection {
     // =========================================================================
 
     /// Performs a vector similarity search.
-    pub fn query(&self, query: &VectorQuery) -> Result<Vec<Doc>> {
+    pub fn query(&self, query: &SearchQuery) -> Result<Vec<Doc>> {
         let mut results: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
             zvec_sys::zvec_collection_query(
+                self.handle,
+                query.handle,
+                &mut results,
+                &mut result_count,
+            )
+        })?;
+
+        let docs = unsafe { collect_docs(results, result_count) };
+        Ok(docs)
+    }
+
+    /// Performs a multi-query that combines several sub-queries with a rerank
+    /// strategy (RRF or weighted).
+    pub fn multi_query(&self, query: &MultiQuery) -> Result<Vec<Doc>> {
+        let mut results: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
+        let mut result_count: usize = 0;
+
+        check_error(unsafe {
+            zvec_sys::zvec_collection_multi_query(
                 self.handle,
                 query.handle,
                 &mut results,

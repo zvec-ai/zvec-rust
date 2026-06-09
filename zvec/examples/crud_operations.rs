@@ -150,7 +150,7 @@ fn main() -> zvec::Result<()> {
     // === QUERY (Vector Search) ===
     println!("\n=== QUERY Operation (Vector Search) ===");
     let query_vector = [0.5, 0.6, 0.7, 0.8];
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vector)
         .topk(3)

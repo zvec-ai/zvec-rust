@@ -133,7 +133,7 @@ fuzz_target!(|input: FuzzInput| {
             let _ = collection.insert(&[&doc]);
 
             // Then query
-            let query = match VectorQuery::new("embedding", &vector_data, topk) {
+            let query = match SearchQuery::new("embedding", &vector_data, topk) {
                 Ok(q) => q,
                 Err(_) => return,
             };

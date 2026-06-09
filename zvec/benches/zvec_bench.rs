@@ -213,7 +213,7 @@ fn bench_query(criterion: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("topk", topk), &topk, |bencher, &topk| {
             let query_vec = random_vector(128);
             bencher.iter(|| {
-                let query = VectorQuery::new("embedding", &query_vec, topk).unwrap();
+                let query = SearchQuery::new("embedding", &query_vec, topk).unwrap();
                 black_box(collection.query(&query).unwrap());
             });
         });
@@ -316,7 +316,7 @@ fn bench_query_builder(criterion: &mut Criterion) {
     criterion.bench_function("query_builder_simple", |bencher| {
         let query_vec = random_vector(128);
         bencher.iter(|| {
-            let query = VectorQuery::builder()
+            let query = SearchQuery::builder()
                 .field_name("embedding")
                 .vector(&query_vec)
                 .topk(10)
@@ -329,7 +329,7 @@ fn bench_query_builder(criterion: &mut Criterion) {
     criterion.bench_function("query_builder_with_filter", |bencher| {
         let query_vec = random_vector(128);
         bencher.iter(|| {
-            let query = VectorQuery::builder()
+            let query = SearchQuery::builder()
                 .field_name("embedding")
                 .vector(&query_vec)
                 .topk(10)
@@ -346,7 +346,7 @@ fn bench_query_builder(criterion: &mut Criterion) {
     criterion.bench_function("query_builder_with_params", |bencher| {
         let query_vec = random_vector(128);
         bencher.iter(|| {
-            let query = VectorQuery::builder()
+            let query = SearchQuery::builder()
                 .field_name("embedding")
                 .vector(&query_vec)
                 .topk(50)
