@@ -42,9 +42,7 @@ impl MultiQuery {
     ///
     /// The sub-query is copied internally; the caller retains ownership.
     pub fn add_sub_query(&mut self, sub: &SubQuery) -> Result<()> {
-        check_error(unsafe {
-            zvec_sys::zvec_multi_query_add_sub_query(self.handle, sub.handle)
-        })
+        check_error(unsafe { zvec_sys::zvec_multi_query_add_sub_query(self.handle, sub.handle) })
     }
 
     /// Returns the number of sub-queries currently registered.
@@ -72,9 +70,7 @@ impl MultiQuery {
 
     /// Sets whether vector data is returned in the result documents.
     pub fn set_include_vector(&mut self, include: bool) -> Result<()> {
-        check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_include_vector(self.handle, include)
-        })
+        check_error(unsafe { zvec_sys::zvec_multi_query_set_include_vector(self.handle, include) })
     }
 
     /// Returns whether vector data is included in the result documents.
@@ -93,11 +89,7 @@ impl MultiQuery {
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_fields.iter().map(|s| s.as_ptr()).collect();
         check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_output_fields(
-                self.handle,
-                c_ptrs.as_ptr(),
-                c_ptrs.len(),
-            )
+            zvec_sys::zvec_multi_query_set_output_fields(self.handle, c_ptrs.as_ptr(), c_ptrs.len())
         })
     }
 
@@ -167,9 +159,7 @@ impl SubQuery {
 
     /// Sets the number of candidates to retrieve before reranking.
     pub fn set_num_candidates(&mut self, n: i32) -> Result<()> {
-        check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_num_candidates(self.handle, n)
-        })
+        check_error(unsafe { zvec_sys::zvec_sub_query_set_num_candidates(self.handle, n) })
     }
 
     /// Returns the number of candidates.
@@ -241,11 +231,7 @@ impl SubQuery {
     /// Sets only the sparse-vector values.
     pub fn set_sparse_values(&mut self, values: &[f32]) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_sparse_values(
-                self.handle,
-                values.as_ptr(),
-                values.len(),
-            )
+            zvec_sys::zvec_sub_query_set_sparse_values(self.handle, values.as_ptr(), values.len())
         })
     }
 

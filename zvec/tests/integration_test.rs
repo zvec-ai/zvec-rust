@@ -933,7 +933,8 @@ fn test_sub_query_sparse_vector_validation() {
     assert_eq!(err.code, ErrorCode::InvalidArgument);
 
     // Valid
-    sub.set_sparse_vector(&[0, 5, 10], &[0.1, 0.5, 0.9]).unwrap();
+    sub.set_sparse_vector(&[0, 5, 10], &[0.1, 0.5, 0.9])
+        .unwrap();
 }
 
 #[test]
