@@ -147,8 +147,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
 
           foreach ($f in $found) {
-            Copy-Item $f.FullName -Destination $canonicalDir -Force
-            Write-Host "  Copied $($f.Name) -> $canonicalDir"
+            if ($f.DirectoryName -ne $canonicalDir) {
+              Copy-Item $f.FullName -Destination $canonicalDir -Force
+              Write-Host "  Copied $($f.Name) -> $canonicalDir"
+            } else {
+              Write-Host "  Already in place: $($f.Name)"
+            }
           }
 
           if (Test-Path "$canonicalDir\zvec_c_api.lib") {
@@ -267,8 +271,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
 
           foreach ($f in $found) {
-            Copy-Item $f.FullName -Destination $canonicalDir -Force
-            Write-Host "  Copied $($f.Name) -> $canonicalDir"
+            if ($f.DirectoryName -ne $canonicalDir) {
+              Copy-Item $f.FullName -Destination $canonicalDir -Force
+              Write-Host "  Copied $($f.Name) -> $canonicalDir"
+            } else {
+              Write-Host "  Already in place: $($f.Name)"
+            }
           }
 
           if (Test-Path "$canonicalDir\zvec_c_api.lib") {
