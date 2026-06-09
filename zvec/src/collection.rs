@@ -357,8 +357,9 @@ impl Collection {
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
-        let c_field_ptrs: Option<Vec<_>> =
-            c_fields.as_ref().map(|f| f.iter().map(|s| s.as_ptr()).collect());
+        let c_field_ptrs: Option<Vec<_>> = c_fields
+            .as_ref()
+            .map(|f| f.iter().map(|s| s.as_ptr()).collect());
         let (fields_ptr, fields_count) = match &c_field_ptrs {
             Some(ptrs) => (ptrs.as_ptr(), ptrs.len()),
             None => (ptr::null(), 0),
