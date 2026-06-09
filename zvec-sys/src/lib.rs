@@ -957,6 +957,9 @@ extern "C" {
         collection: *mut zvec_collection_t,
         primary_keys: *const *const c_char,
         count: usize,
+        output_fields: *const *const c_char,
+        output_field_count: usize,
+        include_vector: bool,
         documents: *mut *mut *mut zvec_doc_t,
         found_count: *mut usize,
     ) -> zvec_error_code_t;

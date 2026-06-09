@@ -331,13 +331,38 @@ impl Collection {
         Ok(docs)
     }
 
-    /// Fetches documents by primary keys.
+    /// Fetches documents by primary keys, returning all fields including vectors.
     pub fn fetch(&self, pks: &[&str]) -> Result<Vec<Doc>> {
+        self.fetch_with_options(pks, None, true)
+    }
+
+    /// Fetches documents by primary keys with control over which fields to return.
+    pub fn fetch_with_options(
+        &self,
+        pks: &[&str],
+        output_fields: Option<&[&str]>,
+        include_vector: bool,
+    ) -> Result<Vec<Doc>> {
         let c_pks: Vec<_> = pks
             .iter()
             .map(|pk| to_cstring(pk))
             .collect::<Result<Vec<_>>>()?;
-        let c_ptrs: Vec<_> = c_pks.iter().map(|pk| pk.as_ptr()).collect();
+        let c_pk_ptrs: Vec<_> = c_pks.iter().map(|pk| pk.as_ptr()).collect();
+
+        let c_fields = output_fields
+            .map(|fields| {
+                fields
+                    .iter()
+                    .map(|f| to_cstring(f))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?;
+        let c_field_ptrs: Option<Vec<_>> =
+            c_fields.as_ref().map(|f| f.iter().map(|s| s.as_ptr()).collect());
+        let (fields_ptr, fields_count) = match &c_field_ptrs {
+            Some(ptrs) => (ptrs.as_ptr(), ptrs.len()),
+            None => (ptr::null(), 0),
+        };
 
         let mut documents: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
         let mut found_count: usize = 0;
@@ -345,8 +370,11 @@ impl Collection {
         check_error(unsafe {
             zvec_sys::zvec_collection_fetch(
                 self.handle,
-                c_ptrs.as_ptr(),
-                c_ptrs.len(),
+                c_pk_ptrs.as_ptr(),
+                c_pk_ptrs.len(),
+                fields_ptr,
+                fields_count,
+                include_vector,
                 &mut documents,
                 &mut found_count,
             )
