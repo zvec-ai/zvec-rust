@@ -109,6 +109,15 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: Fix link.exe conflict with Git Bash
+        if: runner.os == 'Windows'
+        run: |
+          if (Test-Path "C:\Program Files\Git\usr\bin\link.exe") {
+            Rename-Item "C:\Program Files\Git\usr\bin\link.exe" "link_git.exe"
+            Write-Host "Renamed Git link.exe to avoid MSVC linker conflict"
+          }
+        shell: pwsh
+
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -232,6 +241,15 @@ jobs:
       - name: Setup MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Fix link.exe conflict with Git Bash
+        if: runner.os == 'Windows'
+        run: |
+          if (Test-Path "C:\Program Files\Git\usr\bin\link.exe") {
+            Rename-Item "C:\Program Files\Git\usr\bin\link.exe" "link_git.exe"
+            Write-Host "Renamed Git link.exe to avoid MSVC linker conflict"
+          }
+        shell: pwsh
 
       - name: Clone and build zvec C library (Windows)
         if: runner.os == 'Windows'
