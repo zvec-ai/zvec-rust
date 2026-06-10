@@ -71,7 +71,7 @@ jobs:
             -w /zvec \
             quay.io/pypa/manylinux_2_28_x86_64 \
             bash -c "
-              dnf install -y cmake gcc-c++ git
+              dnf install -y cmake gcc-c++ git libaio-devel
               mkdir -p build && cd build
               cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_TOOLS=OFF
               cmake --build . --config Release -j\$(nproc)
