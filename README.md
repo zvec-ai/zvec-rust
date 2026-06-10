@@ -97,32 +97,62 @@ Set `ZVEC_AUTO_BUILD=0` to disable steps 5 and 6.
 use zvec::*;
 
 fn main() -> zvec::Result<()> {
+    // 1. Initialize the engine
     initialize(None)?;
 
-    // Define schema
+    // 2. Define schema
     let schema = CollectionSchema::builder("my_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_vector_field("embedding", DataType::VectorFp32, 128,
-            IndexParams::hnsw(MetricType::Cosine, 16, 200))
+        // Note 1: use `?` to unwrap the Result returned by FieldSchema::new
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        // Note 2: use `?` to unwrap the Result returned by IndexParams::hnsw
+        .add_vector_field(
+            "embedding",
+            DataType::VectorFp32,
+            128,
+            IndexParams::hnsw(MetricType::Cosine, 16, 200)?
+        )
         .build()?;
 
-    // Create collection and insert data
+    println!("Schema built successfully.");
+
+    // 3. Create and open the collection (the directory will be created if it does not exist)
+    // "./data" is the local storage path
     let collection = Collection::create_and_open("./data", &schema, None)?;
 
+    println!(" Collection opened.");
+
+    // 4. Insert data
     let mut doc = Doc::new()?;
     doc.set_pk("doc1");
     doc.add_string("id", "doc1")?;
-    doc.add_vector_f32("embedding", &vec![0.1; 128])?;
+    // Build a 128-dim vector filled with 0.1
+    let vec_data = vec![0.1_f32; 128];
+    doc.add_vector_f32("embedding", &vec_data)?;
+
+    // `insert` accepts a slice of &[&Doc]
     collection.insert(&[&doc])?;
 
-    // Vector similarity search
-    let query = SearchQuery::new("embedding", &vec![0.2; 128], 10)?;
+    println!("Document inserted.");
+
+    // 5. Vector similarity search
+    // Query vector: filled with 0.2
+    let query_vec = vec![0.2_f32; 128];
+    let query = SearchQuery::new("embedding", &query_vec, 10)?;
+
     let results = collection.query(&query)?;
+
+    println!("Search Results:");
     for result in &results {
-        println!("pk={}, score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
+        let pk = result.get_pk().unwrap_or("unknown");
+
+        let score = result.get_score();
+        println!("   PK: {}, Score: {:.4}", pk, score);
     }
 
+    // 6. Shutdown the engine
     shutdown()?;
+
+    println!("Test Finished!");
     Ok(())
 }
 ```
@@ -150,18 +180,29 @@ cargo run --example vector_search
 
 | Function | Description |
 |---|---|
-| `initialize(config)` | Initialize the library (call once) |
+| `initialize(config)` | Initialize the library (call once); pass `None` for defaults |
 | `shutdown()` | Release all resources |
 | `version()` | Get version string |
 | `is_initialized()` | Check initialization status |
+
+Use [`ConfigBuilder`](zvec/src/config.rs) to customize memory limits, thread counts, and logging:
+
+```rust
+let config = ConfigBuilder::new()
+    .memory_limit(1024 * 1024 * 1024)
+    .num_threads(4)
+    .enable_console_log(true)
+    .build();
+initialize(Some(&config))?;
+```
 
 ### Schema Definition
 
 ```rust
 let schema = CollectionSchema::builder("name")
-    .add_field(FieldSchema::new("field", DataType::String, false, 0))
+    .add_field(FieldSchema::new("field", DataType::String, false, 0)?)
     .add_vector_field("vec", DataType::VectorFp32, 128,
-        IndexParams::hnsw(MetricType::Cosine, 16, 200))
+        IndexParams::hnsw(MetricType::Cosine, 16, 200)?)
     .build()?;
 ```
 
@@ -175,8 +216,13 @@ let schema = CollectionSchema::builder("name")
 | `collection.update(&docs)` | Update documents |
 | `collection.upsert(&docs)` | Insert or update |
 | `collection.delete(&pks)` | Delete by primary keys |
+| `collection.delete_by_filter(filter)` | Delete documents matching a filter expression |
 | `collection.query(&query)` | Vector similarity search |
+| `collection.multi_query(&query)` | Multi-route search with RRF / weighted rerank |
 | `collection.fetch(&pks)` | Fetch by primary keys |
+| `collection.fetch_with_options(&pks, fields, include_vector)` | Fetch with output-field control |
+| `collection.create_index(field, params)` / `drop_index(field)` | Runtime index management |
+| `collection.optimize()` | Rebuild indexes / merge segments |
 | `collection.stats()` | Get collection statistics |
 | `collection.flush()` | Flush to disk |
 
@@ -189,8 +235,10 @@ doc.add_string("name", "value")?;
 doc.add_i64("count", 42)?;
 doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3])?;
 
-let name = doc.get_string("name")?;
-let count = doc.get_i64("count")?;
+// Getters return `Result<Option<T>>` — `?` only unwraps the Result.
+// Use `unwrap_or_default()` / `expect(..)` etc. to handle the Option.
+let name: Option<String> = doc.get_string("name")?;
+let count: Option<i64> = doc.get_i64("count")?;
 ```
 
 ### Vector Query
@@ -216,9 +264,11 @@ let query = SearchQuery::builder()
 | **Scalar** | `Bool`, `Int32`, `Int64`, `Uint32`, `Uint64`, `Float`, `Double`, `String`, `Binary` |
 | **Vector** | `VectorFp16`, `VectorFp32`, `VectorFp64`, `VectorInt4`, `VectorInt8`, `VectorInt16`, `VectorBinary32`, `VectorBinary64` |
 | **Sparse** | `SparseVectorFp16`, `SparseVectorFp32` |
-| **Array** | `ArrayBool`, `ArrayInt32`, `ArrayInt64`, `ArrayFloat`, `ArrayDouble`, `ArrayString` |
+| **Array** | `ArrayBool`, `ArrayInt32`, `ArrayInt64`, `ArrayUint32`, `ArrayUint64`, `ArrayFloat`, `ArrayDouble`, `ArrayString`, `ArrayBinary` |
 
 ## Index Types
+
+Available distance metrics: `L2`, `Ip`, `Cosine`, `MipsL2`.
 
 | Type | Constructor | Description |
 |---|---|---|
@@ -227,6 +277,7 @@ let query = SearchQuery::builder()
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | Inverted file index |
 | Flat | `IndexParams::flat(metric)` | Brute-force index |
 | Invert | `IndexParams::invert(range, wildcard)` | Scalar field index |
+| FTS | `IndexParams::fts(tokenizer, filters, extra)` | Full-text search index |
 
 ## Testing
 

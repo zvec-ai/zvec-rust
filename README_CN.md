@@ -97,32 +97,62 @@ make test-all     # 运行所有测试
 use zvec::*;
 
 fn main() -> zvec::Result<()> {
+    // 1. 初始化引擎
     initialize(None)?;
 
-    // 定义 Schema
+    // 2. 定义 Schema
     let schema = CollectionSchema::builder("my_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_vector_field("embedding", DataType::VectorFp32, 128,
-            IndexParams::hnsw(MetricType::Cosine, 16, 200))
+        // 修正点 1: 使用 ? 解包 FieldSchema::new 的 Result
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?) 
+        // 修正点 2: 使用 ? 解包 IndexParams::hnsw 的 Result
+        .add_vector_field(
+            "embedding", 
+            DataType::VectorFp32, 
+            128,
+            IndexParams::hnsw(MetricType::Cosine, 16, 200)?
+        )
         .build()?;
 
-    // 创建集合并插入数据
-    let collection = Collection::create_and_open("./data", &schema, None)?;
+    println!("Schema built successfully.");
 
+    // 3. 创建集合并打开 (如果目录不存在会自动创建)
+    // "./data" 是本地存储路径
+    let collection = Collection::create_and_open("./data", &schema, None)?;
+    
+    println!(" Collection opened.");
+
+    // 4. 插入数据
     let mut doc = Doc::new()?;
     doc.set_pk("doc1");
     doc.add_string("id", "doc1")?;
-    doc.add_vector_f32("embedding", &vec![0.1; 128])?;
+    // 创建一个 128 维的向量，所有值为 0.1
+    let vec_data = vec![0.1_f32; 128];
+    doc.add_vector_f32("embedding", &vec_data)?;
+    
+    // insert 接受切片 &[&Doc]
     collection.insert(&[&doc])?;
+    
+    println!("Document inserted.");
 
-    // 向量相似度搜索
-    let query = SearchQuery::new("embedding", &vec![0.2; 128], 10)?;
+    // 5. 向量相似度搜索
+    // 查询向量：所有值为 0.2
+    let query_vec = vec![0.2_f32; 128];
+    let query = SearchQuery::new("embedding", &query_vec, 10)?;
+    
     let results = collection.query(&query)?;
+
+    println!("Search Results:");
     for result in &results {
-        println!("pk={}, score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
+        let pk = result.get_pk().unwrap_or("unknown"); 
+        
+        let score = result.get_score();
+        println!("   PK: {}, Score: {:.4}", pk, score);
     }
 
+    // 6. 关闭引擎
     shutdown()?;
+    
+    println!("Test Finished!");
     Ok(())
 }
 ```
@@ -150,18 +180,29 @@ cargo run --example vector_search
 
 | 函数 | 说明 |
 |---|---|
-| `initialize(config)` | 初始化库（调用一次） |
+| `initialize(config)` | 初始化库（调用一次）；传 `None` 使用默认配置 |
 | `shutdown()` | 释放所有资源 |
 | `version()` | 获取版本字符串 |
 | `is_initialized()` | 检查初始化状态 |
+
+使用 [`ConfigBuilder`](zvec/src/config.rs) 自定义内存上限、线程数与日志：
+
+```rust
+let config = ConfigBuilder::new()
+    .memory_limit(1024 * 1024 * 1024)
+    .num_threads(4)
+    .enable_console_log(true)
+    .build();
+initialize(Some(&config))?;
+```
 
 ### Schema 定义
 
 ```rust
 let schema = CollectionSchema::builder("name")
-    .add_field(FieldSchema::new("field", DataType::String, false, 0))
+    .add_field(FieldSchema::new("field", DataType::String, false, 0)?)
     .add_vector_field("vec", DataType::VectorFp32, 128,
-        IndexParams::hnsw(MetricType::Cosine, 16, 200))
+        IndexParams::hnsw(MetricType::Cosine, 16, 200)?)
     .build()?;
 ```
 
@@ -175,8 +216,13 @@ let schema = CollectionSchema::builder("name")
 | `collection.update(&docs)` | 更新文档 |
 | `collection.upsert(&docs)` | 插入或更新 |
 | `collection.delete(&pks)` | 按主键删除 |
+| `collection.delete_by_filter(filter)` | 按过滤表达式批量删除 |
 | `collection.query(&query)` | 向量相似度搜索 |
+| `collection.multi_query(&query)` | 多路检索 + RRF / 加权重排 |
 | `collection.fetch(&pks)` | 按主键获取 |
+| `collection.fetch_with_options(&pks, fields, include_vector)` | 按主键获取并控制输出字段 |
+| `collection.create_index(field, params)` / `drop_index(field)` | 运行时索引管理 |
+| `collection.optimize()` | 重建索引 / 合并段 |
 | `collection.stats()` | 获取集合统计信息 |
 | `collection.flush()` | 刷新到磁盘 |
 
@@ -189,8 +235,10 @@ doc.add_string("name", "value")?;
 doc.add_i64("count", 42)?;
 doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3])?;
 
-let name = doc.get_string("name")?;
-let count = doc.get_i64("count")?;
+// Getter 返回 `Result<Option<T>>` —— `?` 只解开 Result，剩下的 Option 仍需处理。
+// 可使用 `unwrap_or_default()` / `expect(..)` 等。
+let name: Option<String> = doc.get_string("name")?;
+let count: Option<i64> = doc.get_i64("count")?;
 ```
 
 ### 向量查询
@@ -216,9 +264,11 @@ let query = SearchQuery::builder()
 | **标量** | `Bool`, `Int32`, `Int64`, `Uint32`, `Uint64`, `Float`, `Double`, `String`, `Binary` |
 | **向量** | `VectorFp16`, `VectorFp32`, `VectorFp64`, `VectorInt4`, `VectorInt8`, `VectorInt16`, `VectorBinary32`, `VectorBinary64` |
 | **稀疏向量** | `SparseVectorFp16`, `SparseVectorFp32` |
-| **数组** | `ArrayBool`, `ArrayInt32`, `ArrayInt64`, `ArrayFloat`, `ArrayDouble`, `ArrayString` |
+| **数组** | `ArrayBool`, `ArrayInt32`, `ArrayInt64`, `ArrayUint32`, `ArrayUint64`, `ArrayFloat`, `ArrayDouble`, `ArrayString`, `ArrayBinary` |
 
 ## 索引类型
+
+可用距离度量：`L2`、`Ip`、`Cosine`、`MipsL2`。
 
 | 类型 | 构造函数 | 说明 |
 |---|---|---|
@@ -227,6 +277,7 @@ let query = SearchQuery::builder()
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | 倒排文件索引 |
 | Flat | `IndexParams::flat(metric)` | 暴力搜索索引 |
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
+| FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 
 ## 测试
 
