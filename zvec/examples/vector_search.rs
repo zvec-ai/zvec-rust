@@ -8,15 +8,15 @@ fn main() -> zvec::Result<()> {
 
     // Create a simple schema for demonstration
     let schema = CollectionSchema::builder("search_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("title", DataType::String, true, 0))
-        .add_field(FieldSchema::new("category", DataType::String, true, 0))
-        .add_field(FieldSchema::new("price", DataType::Float, true, 0))
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_field(FieldSchema::new("title", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("category", DataType::String, true, 0)?)
+        .add_field(FieldSchema::new("price", DataType::Float, true, 0)?)
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::hnsw(MetricType::Cosine, 16, 100),
+            IndexParams::hnsw(MetricType::Cosine, 16, 100)?,
         )
         .build()?;
 
@@ -78,7 +78,7 @@ fn main() -> zvec::Result<()> {
     // Example 1: Simple vector query
     println!("\n=== Example 1: Simple Vector Query ===");
     let query_vector = [0.5, 0.6, 0.7, 0.8];
-    let query = VectorQuery::new("embedding", &query_vector, 3)?;
+    let query = SearchQuery::new("embedding", &query_vector, 3)?;
     let results = collection.query(&query)?;
 
     println!("Top 3 results:");
@@ -90,7 +90,7 @@ fn main() -> zvec::Result<()> {
 
     // Example 2: Builder pattern query with custom parameters
     println!("\n=== Example 2: Builder Pattern Query ===");
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vector)
         .topk(5)
@@ -107,7 +107,7 @@ fn main() -> zvec::Result<()> {
 
     // Example 3: Query with output fields
     println!("\n=== Example 3: Query with Output Fields ===");
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vector)
         .topk(3)
@@ -122,13 +122,9 @@ fn main() -> zvec::Result<()> {
         let score = result.get_score();
 
         // Get output field values
-        let title = result
-            .get_string("title")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let category = result
-            .get_string("category")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let price = result.get_f32("price").unwrap_or(0.0);
+        let title = result.get_string("title")?.unwrap_or_default();
+        let category = result.get_string("category")?.unwrap_or_default();
+        let price = result.get_f32("price")?.unwrap_or(0.0);
 
         println!(
             "  #{}: pk={}, similarity={:.4}, title='{}', category='{}', price={:.2}",
@@ -144,7 +140,7 @@ fn main() -> zvec::Result<()> {
     // Example 4: Different top_k values
     println!("\n=== Example 4: Different Top K Values ===");
     for topk in [1, 3, 5] {
-        let query = VectorQuery::new("embedding", &query_vector, topk)?;
+        let query = SearchQuery::new("embedding", &query_vector, topk)?;
         let results = collection.query(&query)?;
         println!("Top {} results:", topk);
         for (i, result) in results.iter().enumerate() {
@@ -159,7 +155,7 @@ fn main() -> zvec::Result<()> {
     let query_vectors: Vec<[f32; 4]> = vec![[0.1, 0.2, 0.3, 0.4], [0.9, 0.1, 0.2, 0.3]];
 
     for (idx, qvec) in query_vectors.iter().enumerate() {
-        let query = VectorQuery::new("embedding", qvec, 2)?;
+        let query = SearchQuery::new("embedding", qvec, 2)?;
         let results = collection.query(&query)?;
         println!("Query #{} results:", idx + 1);
         for (i, result) in results.iter().enumerate() {
@@ -171,7 +167,7 @@ fn main() -> zvec::Result<()> {
 
     // Example 6: Query with all available fields
     println!("\n=== Example 6: Query with All Fields ===");
-    let query = VectorQuery::builder()
+    let query = SearchQuery::builder()
         .field_name("embedding")
         .vector(&query_vector)
         .topk(2)
@@ -185,16 +181,10 @@ fn main() -> zvec::Result<()> {
         let pk = result.get_pk().unwrap_or("<unknown>");
         let score = result.get_score();
 
-        let id = result
-            .get_string("id")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let title = result
-            .get_string("title")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let category = result
-            .get_string("category")
-            .unwrap_or_else(|_| "<none>".to_string());
-        let price = result.get_f32("price").unwrap_or(0.0);
+        let id = result.get_string("id")?.unwrap_or_default();
+        let title = result.get_string("title")?.unwrap_or_default();
+        let category = result.get_string("category")?.unwrap_or_default();
+        let price = result.get_f32("price")?.unwrap_or(0.0);
 
         println!("  Result #{}:", i + 1);
         println!("    Primary Key: {}", pk);

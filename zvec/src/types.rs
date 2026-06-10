@@ -127,6 +127,8 @@ pub enum IndexType {
     Flat = 3,
     /// Inverted index for scalar field filtering.
     Invert = 10,
+    /// Full-text search index.
+    Fts = 11,
 }
 
 impl From<u32> for IndexType {
@@ -136,6 +138,7 @@ impl From<u32> for IndexType {
             2 => IndexType::Ivf,
             3 => IndexType::Flat,
             10 => IndexType::Invert,
+            11 => IndexType::Fts,
             _ => IndexType::Undefined,
         }
     }

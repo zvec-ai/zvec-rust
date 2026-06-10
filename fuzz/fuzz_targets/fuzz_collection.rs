@@ -49,16 +49,32 @@ fuzz_target!(|input: FuzzInput| {
     };
 
     // Create schema
+    let index_params = match IndexParams::hnsw(MetricType::Cosine, 16, 200) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
     let schema = match CollectionSchema::builder("fuzz_collection")
-        .add_field(FieldSchema::new("id", DataType::String, false, 0))
-        .add_field(FieldSchema::new("category", DataType::String, true, 0))
-        .add_field(FieldSchema::new("score", DataType::Float, true, 0))
-        .add_field(FieldSchema::new("count", DataType::Int64, true, 0))
+        .add_field(match FieldSchema::new("id", DataType::String, false, 0) {
+            Ok(f) => f,
+            Err(_) => return,
+        })
+        .add_field(match FieldSchema::new("category", DataType::String, true, 0) {
+            Ok(f) => f,
+            Err(_) => return,
+        })
+        .add_field(match FieldSchema::new("score", DataType::Float, true, 0) {
+            Ok(f) => f,
+            Err(_) => return,
+        })
+        .add_field(match FieldSchema::new("count", DataType::Int64, true, 0) {
+            Ok(f) => f,
+            Err(_) => return,
+        })
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::hnsw(MetricType::Cosine, 16, 200),
+            index_params,
         )
         .build()
     {
@@ -117,7 +133,7 @@ fuzz_target!(|input: FuzzInput| {
             let _ = collection.insert(&[&doc]);
 
             // Then query
-            let query = match VectorQuery::new("embedding", &vector_data, topk) {
+            let query = match SearchQuery::new("embedding", &vector_data, topk) {
                 Ok(q) => q,
                 Err(_) => return,
             };

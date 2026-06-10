@@ -19,15 +19,28 @@ impl IndexParams {
     }
 
     /// Creates HNSW index parameters.
-    pub fn hnsw(metric: MetricType, m: i32, ef_construction: i32) -> Self {
+    pub fn hnsw(metric: MetricType, m: i32, ef_construction: i32) -> Result<Self> {
         unsafe {
             let handle = zvec_sys::zvec_index_params_create(IndexType::Hnsw as u32);
-            zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32);
-            zvec_sys::zvec_index_params_set_hnsw_params(handle, m, ef_construction);
-            IndexParams {
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create HNSW index params".into(),
+                });
+            }
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+                handle,
+                m,
+                ef_construction,
+            ))?;
+            Ok(IndexParams {
                 handle,
                 owned: true,
-            }
+            })
         }
     }
 
@@ -37,57 +50,149 @@ impl IndexParams {
         m: i32,
         ef_construction: i32,
         quantize: QuantizeType,
-    ) -> Self {
+    ) -> Result<Self> {
         unsafe {
             let handle = zvec_sys::zvec_index_params_create(IndexType::Hnsw as u32);
-            zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32);
-            zvec_sys::zvec_index_params_set_hnsw_params(handle, m, ef_construction);
-            zvec_sys::zvec_index_params_set_quantize_type(handle, quantize as u32);
-            IndexParams {
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create HNSW index params".into(),
+                });
+            }
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+                handle,
+                m,
+                ef_construction,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_quantize_type(
+                handle,
+                quantize as u32,
+            ))?;
+            Ok(IndexParams {
                 handle,
                 owned: true,
-            }
+            })
         }
     }
 
     /// Creates IVF index parameters.
-    pub fn ivf(metric: MetricType, n_list: i32, n_iters: i32, use_soar: bool) -> Self {
+    pub fn ivf(metric: MetricType, n_list: i32, n_iters: i32, use_soar: bool) -> Result<Self> {
         unsafe {
             let handle = zvec_sys::zvec_index_params_create(IndexType::Ivf as u32);
-            zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32);
-            zvec_sys::zvec_index_params_set_ivf_params(handle, n_list, n_iters, use_soar);
-            IndexParams {
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create IVF index params".into(),
+                });
+            }
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_sys::zvec_index_params_set_ivf_params(
+                handle, n_list, n_iters, use_soar,
+            ))?;
+            Ok(IndexParams {
                 handle,
                 owned: true,
-            }
+            })
         }
     }
 
     /// Creates Flat index parameters.
-    pub fn flat(metric: MetricType) -> Self {
+    pub fn flat(metric: MetricType) -> Result<Self> {
         unsafe {
             let handle = zvec_sys::zvec_index_params_create(IndexType::Flat as u32);
-            zvec_sys::zvec_index_params_set_metric_type(handle, metric as u32);
-            IndexParams {
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create Flat index params".into(),
+                });
+            }
+            check_error(zvec_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            Ok(IndexParams {
                 handle,
                 owned: true,
-            }
+            })
         }
     }
 
     /// Creates inverted index parameters for scalar fields.
-    pub fn invert(enable_range_opt: bool, enable_wildcard: bool) -> Self {
+    pub fn invert(enable_range_opt: bool, enable_wildcard: bool) -> Result<Self> {
         unsafe {
             let handle = zvec_sys::zvec_index_params_create(IndexType::Invert as u32);
-            zvec_sys::zvec_index_params_set_invert_params(
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create Invert index params".into(),
+                });
+            }
+            check_error(zvec_sys::zvec_index_params_set_invert_params(
                 handle,
                 enable_range_opt,
                 enable_wildcard,
-            );
-            IndexParams {
+            ))?;
+            Ok(IndexParams {
                 handle,
                 owned: true,
+            })
+        }
+    }
+
+    /// Creates FTS (Full-Text Search) index parameters.
+    ///
+    /// All parameters are optional — passing `None` keeps the library default.
+    pub fn fts(
+        tokenizer_name: Option<&str>,
+        filters: Option<&[&str]>,
+        extra_params: Option<&str>,
+    ) -> Result<Self> {
+        unsafe {
+            let handle = zvec_sys::zvec_index_params_create(IndexType::Fts as u32);
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create FTS index params".into(),
+                });
             }
+            let c_tokenizer = tokenizer_name.map(to_cstring).transpose()?;
+            let c_extra = extra_params.map(to_cstring).transpose()?;
+
+            let filter_array = if let Some(f) = filters {
+                let arr = zvec_sys::zvec_string_array_create(f.len());
+                for (i, s) in f.iter().enumerate() {
+                    let cs = to_cstring(s)?;
+                    zvec_sys::zvec_string_array_add(arr, i, cs.as_ptr());
+                }
+                arr
+            } else {
+                std::ptr::null_mut()
+            };
+
+            let result = check_error(zvec_sys::zvec_index_params_set_fts_params(
+                handle,
+                c_tokenizer
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
+                filter_array as *const _,
+                c_extra.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+            ));
+
+            if !filter_array.is_null() {
+                zvec_sys::zvec_string_array_destroy(filter_array);
+            }
+            result?;
+            Ok(IndexParams {
+                handle,
+                owned: true,
+            })
         }
     }
 
@@ -142,31 +247,7 @@ impl FieldSchema {
     /// - `data_type`: Data type of the field
     /// - `nullable`: Whether the field can be null
     /// - `dimension`: Vector dimension (0 for non-vector fields)
-    pub fn new(name: &str, data_type: DataType, nullable: bool, dimension: u32) -> Self {
-        let c_name = to_cstring(name).expect("field name must not contain null bytes");
-        let handle = unsafe {
-            zvec_sys::zvec_field_schema_create(
-                c_name.as_ptr(),
-                data_type as u32,
-                nullable,
-                dimension,
-            )
-        };
-        FieldSchema {
-            handle,
-            owned: true,
-        }
-    }
-
-    /// Creates a new field schema, returning an error if the name contains null bytes.
-    ///
-    /// This is the fallible alternative to [`FieldSchema::new`].
-    pub fn try_new(
-        name: &str,
-        data_type: DataType,
-        nullable: bool,
-        dimension: u32,
-    ) -> Result<Self> {
+    pub fn new(name: &str, data_type: DataType, nullable: bool, dimension: u32) -> Result<Self> {
         let c_name = to_cstring(name)?;
         let handle = unsafe {
             zvec_sys::zvec_field_schema_create(
@@ -391,6 +472,7 @@ pub struct CollectionSchemaBuilder {
     name: String,
     fields: Vec<(FieldSchema, Option<IndexParams>)>,
     max_doc_count_per_segment: Option<u64>,
+    deferred_error: Option<Error>,
 }
 
 impl CollectionSchemaBuilder {
@@ -400,6 +482,7 @@ impl CollectionSchemaBuilder {
             name: name.to_string(),
             fields: Vec::new(),
             max_doc_count_per_segment: None,
+            deferred_error: None,
         }
     }
 
@@ -411,27 +494,45 @@ impl CollectionSchemaBuilder {
 
     /// Adds a vector field with index parameters.
     pub fn add_vector_field(
-        mut self,
+        self,
         name: &str,
         data_type: DataType,
         dimension: u32,
         index_params: IndexParams,
     ) -> Self {
-        let field = FieldSchema::new(name, data_type, false, dimension);
-        self.fields.push((field, Some(index_params)));
-        self
+        match FieldSchema::new(name, data_type, false, dimension) {
+            Ok(field) => {
+                let mut s = self;
+                s.fields.push((field, Some(index_params)));
+                s
+            }
+            Err(e) => {
+                let mut s = self;
+                s.deferred_error = Some(e);
+                s
+            }
+        }
     }
 
     /// Adds a scalar field with an inverted index.
     pub fn add_indexed_field(
-        mut self,
+        self,
         name: &str,
         data_type: DataType,
         index_params: IndexParams,
     ) -> Self {
-        let field = FieldSchema::new(name, data_type, false, 0);
-        self.fields.push((field, Some(index_params)));
-        self
+        match FieldSchema::new(name, data_type, false, 0) {
+            Ok(field) => {
+                let mut s = self;
+                s.fields.push((field, Some(index_params)));
+                s
+            }
+            Err(e) => {
+                let mut s = self;
+                s.deferred_error = Some(e);
+                s
+            }
+        }
     }
 
     /// Sets the maximum document count per segment.
@@ -442,6 +543,9 @@ impl CollectionSchemaBuilder {
 
     /// Builds the collection schema.
     pub fn build(self) -> Result<CollectionSchema> {
+        if let Some(e) = self.deferred_error {
+            return Err(e);
+        }
         let mut schema = CollectionSchema::new(&self.name)?;
 
         for (mut field, index_params) in self.fields {
@@ -474,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_collection_schema_builder_add_field() {
-        let field = FieldSchema::new("test_field", DataType::Int32, false, 0);
+        let field = FieldSchema::new("test_field", DataType::Int32, false, 0).unwrap();
         let builder = CollectionSchemaBuilder::new("test_collection").add_field(field);
 
         assert_eq!(builder.fields.len(), 1);
@@ -484,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_collection_schema_builder_add_vector_field() {
-        let index_params = IndexParams::hnsw(MetricType::L2, 16, 200);
+        let index_params = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
         let builder = CollectionSchemaBuilder::new("test_collection").add_vector_field(
             "vector",
             DataType::VectorFp32,
@@ -499,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_collection_schema_builder_add_indexed_field() {
-        let index_params = IndexParams::invert(true, false);
+        let index_params = IndexParams::invert(true, false).unwrap();
         let builder = CollectionSchemaBuilder::new("test_collection").add_indexed_field(
             "age",
             DataType::Int32,
@@ -521,9 +625,9 @@ mod tests {
 
     #[test]
     fn test_collection_schema_builder_multiple_fields() {
-        let field1 = FieldSchema::new("id", DataType::Int64, false, 0);
-        let field2 = FieldSchema::new("name", DataType::String, false, 0);
-        let index_params = IndexParams::hnsw(MetricType::L2, 16, 200);
+        let field1 = FieldSchema::new("id", DataType::Int64, false, 0).unwrap();
+        let field2 = FieldSchema::new("name", DataType::String, false, 0).unwrap();
+        let index_params = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
 
         let builder = CollectionSchemaBuilder::new("test_collection")
             .add_field(field1)
@@ -538,14 +642,15 @@ mod tests {
 
     #[test]
     fn test_index_params_hnsw() {
-        let params = IndexParams::hnsw(MetricType::L2, 16, 200);
+        let params = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
         assert_eq!(params.index_type(), IndexType::Hnsw);
         assert_eq!(params.metric_type(), MetricType::L2);
     }
 
     #[test]
     fn test_index_params_hnsw_with_quantize() {
-        let params = IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Int8);
+        let params =
+            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Int8).unwrap();
         assert_eq!(params.index_type(), IndexType::Hnsw);
         assert_eq!(params.metric_type(), MetricType::L2);
         assert_eq!(params.quantize_type(), QuantizeType::Int8);
@@ -553,27 +658,27 @@ mod tests {
 
     #[test]
     fn test_index_params_ivf() {
-        let params = IndexParams::ivf(MetricType::Ip, 100, 10, true);
+        let params = IndexParams::ivf(MetricType::Ip, 100, 10, true).unwrap();
         assert_eq!(params.index_type(), IndexType::Ivf);
         assert_eq!(params.metric_type(), MetricType::Ip);
     }
 
     #[test]
     fn test_index_params_flat() {
-        let params = IndexParams::flat(MetricType::Cosine);
+        let params = IndexParams::flat(MetricType::Cosine).unwrap();
         assert_eq!(params.index_type(), IndexType::Flat);
         assert_eq!(params.metric_type(), MetricType::Cosine);
     }
 
     #[test]
     fn test_index_params_invert() {
-        let params = IndexParams::invert(true, true);
+        let params = IndexParams::invert(true, true).unwrap();
         assert_eq!(params.index_type(), IndexType::Invert);
     }
 
     #[test]
     fn test_field_schema_properties() {
-        let field = FieldSchema::new("test_field", DataType::VectorFp32, true, 128);
+        let field = FieldSchema::new("test_field", DataType::VectorFp32, true, 128).unwrap();
         assert_eq!(field.name(), "test_field");
         assert_eq!(field.data_type(), DataType::VectorFp32);
         assert_eq!(field.dimension(), 128);
@@ -589,20 +694,26 @@ mod tests {
 
     #[test]
     fn test_field_schema_non_nullable() {
-        let field = FieldSchema::new("test_field", DataType::Int32, false, 0);
+        let field = FieldSchema::new("test_field", DataType::Int32, false, 0).unwrap();
         assert!(!field.is_nullable());
     }
 
     #[test]
     fn test_field_schema_scalar_dimension_zero() {
-        let field = FieldSchema::new("scalar_field", DataType::String, false, 0);
+        let field = FieldSchema::new("scalar_field", DataType::String, false, 0).unwrap();
         assert_eq!(field.dimension(), 0);
         assert!(!field.is_vector_field());
     }
 
     #[test]
-    fn test_field_schema_try_new_success() {
-        let result = FieldSchema::try_new("valid_field", DataType::Int64, true, 0);
+    fn test_field_schema_new_with_null_byte() {
+        let result = FieldSchema::new("invalid\0field", DataType::String, false, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_field_schema_new_success() {
+        let result = FieldSchema::new("valid_field", DataType::Int64, true, 0);
         assert!(result.is_ok());
         let field = result.unwrap();
         assert_eq!(field.name(), "valid_field");
@@ -611,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_index_params_set_metric_type() {
-        let mut params = IndexParams::hnsw(MetricType::L2, 16, 200);
+        let mut params = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
         params.set_metric_type(MetricType::Cosine).unwrap();
         assert_eq!(params.metric_type(), MetricType::Cosine);
     }
@@ -619,32 +730,33 @@ mod tests {
     #[test]
     fn test_index_params_set_quantize_type() {
         let mut params =
-            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Undefined);
+            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Undefined)
+                .unwrap();
         params.set_quantize_type(QuantizeType::Int8).unwrap();
         assert_eq!(params.quantize_type(), QuantizeType::Int8);
     }
 
     #[test]
     fn test_index_params_ivf_cosine() {
-        let params = IndexParams::ivf(MetricType::Cosine, 100, 10, false);
+        let params = IndexParams::ivf(MetricType::Cosine, 100, 10, false).unwrap();
         assert_eq!(params.index_type(), IndexType::Ivf);
         assert_eq!(params.metric_type(), MetricType::Cosine);
     }
 
     #[test]
     fn test_index_params_flat_ip() {
-        let params = IndexParams::flat(MetricType::Ip);
+        let params = IndexParams::flat(MetricType::Ip).unwrap();
         assert_eq!(params.index_type(), IndexType::Flat);
         assert_eq!(params.metric_type(), MetricType::Ip);
     }
 
     #[test]
     fn test_collection_schema_builder_chaining() {
-        let vector_index = IndexParams::hnsw(MetricType::L2, 16, 200);
-        let scalar_index = IndexParams::invert(true, false);
+        let vector_index = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
+        let scalar_index = IndexParams::invert(true, false).unwrap();
 
         let builder = CollectionSchemaBuilder::new("chained_collection")
-            .add_field(FieldSchema::new("id", DataType::Int64, false, 0))
+            .add_field(FieldSchema::new("id", DataType::Int64, false, 0).unwrap())
             .add_vector_field("embedding", DataType::VectorFp32, 128, vector_index)
             .add_indexed_field("category", DataType::String, scalar_index)
             .max_doc_count_per_segment(5000);

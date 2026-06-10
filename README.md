@@ -50,7 +50,7 @@ Just add the dependency — the build script handles everything:
 
 ```toml
 [dependencies]
-zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.3.1" }
+zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0" }
 ```
 
 On first build, `build.rs` will automatically download the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and set up the library path via `rpath`.
@@ -116,7 +116,7 @@ fn main() -> zvec::Result<()> {
     collection.insert(&[&doc])?;
 
     // Vector similarity search
-    let query = VectorQuery::new("embedding", &vec![0.2; 128], 10)?;
+    let query = SearchQuery::new("embedding", &vec![0.2; 128], 10)?;
     let results = collection.query(&query)?;
     for result in &results {
         println!("pk={}, score={:.4}", result.get_pk().unwrap_or(""), result.get_score());
@@ -197,10 +197,10 @@ let count = doc.get_i64("count")?;
 
 ```rust
 // Simple query
-let query = VectorQuery::new("embedding", &query_vec, 10)?;
+let query = SearchQuery::new("embedding", &query_vec, 10)?;
 
 // Builder pattern with filters
-let query = VectorQuery::builder()
+let query = SearchQuery::builder()
     .field_name("embedding")
     .vector(&query_vec)
     .topk(10)

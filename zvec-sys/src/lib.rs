@@ -116,6 +116,34 @@ pub struct zvec_flat_query_params_t {
     _private: [u8; 0],
 }
 
+/// Opaque pointer to FTS query parameters.
+/// Controls the default boolean operator for adjacent bare terms.
+#[repr(C)]
+pub struct zvec_fts_query_params_t {
+    _private: [u8; 0],
+}
+
+/// Opaque pointer to FTS query payload.
+/// Holds query_string (boolean expression) and match_string (natural-language).
+#[repr(C)]
+pub struct zvec_fts_t {
+    _private: [u8; 0],
+}
+
+/// Opaque pointer to a multi-query object.
+/// Combines multiple sub-queries with a re-ranking strategy (RRF / Weighted).
+#[repr(C)]
+pub struct zvec_multi_query_t {
+    _private: [u8; 0],
+}
+
+/// Opaque pointer to a sub-query object used inside a multi-query.
+/// Carries a per-field vector or sparse vector and index-specific parameters.
+#[repr(C)]
+pub struct zvec_sub_query_t {
+    _private: [u8; 0],
+}
+
 // =============================================================================
 // Type Aliases
 // =============================================================================
@@ -241,6 +269,8 @@ pub const ZVEC_INDEX_TYPE_IVF: zvec_index_type_t = 2;
 pub const ZVEC_INDEX_TYPE_FLAT: zvec_index_type_t = 3;
 /// Inverted index for scalar field filtering.
 pub const ZVEC_INDEX_TYPE_INVERT: zvec_index_type_t = 10;
+/// Full-text search index.
+pub const ZVEC_INDEX_TYPE_FTS: zvec_index_type_t = 11;
 
 // =============================================================================
 // Metric Type Constants
@@ -514,6 +544,13 @@ extern "C" {
     ) -> zvec_error_code_t;
     pub fn zvec_config_data_get_brute_force_by_keys_ratio(config: *const zvec_config_data_t)
         -> f32;
+    pub fn zvec_config_data_set_fts_brute_force_by_keys_ratio(
+        config: *mut zvec_config_data_t,
+        ratio: f32,
+    ) -> zvec_error_code_t;
+    pub fn zvec_config_data_get_fts_brute_force_by_keys_ratio(
+        config: *const zvec_config_data_t,
+    ) -> f32;
     pub fn zvec_config_data_set_optimize_thread_count(
         config: *mut zvec_config_data_t,
         thread_count: u32,
@@ -577,6 +614,18 @@ extern "C" {
         params: *const zvec_index_params_t,
         out_enable_range_opt: *mut bool,
         out_enable_wildcard: *mut bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_set_fts_params(
+        params: *mut zvec_index_params_t,
+        tokenizer_name: *const c_char,
+        filters: *const zvec_string_array_t,
+        extra_params: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_get_fts_params(
+        params: *const zvec_index_params_t,
+        out_tokenizer_name: *mut *const c_char,
+        out_filters: *mut *mut zvec_string_array_t,
+        out_extra_params: *mut *const c_char,
     ) -> zvec_error_code_t;
 
     // -------------------------------------------------------------------------
@@ -918,10 +967,19 @@ extern "C" {
         results: *mut *mut *mut zvec_doc_t,
         result_count: *mut usize,
     ) -> zvec_error_code_t;
+    pub fn zvec_collection_multi_query(
+        collection: *const zvec_collection_t,
+        query: *const zvec_multi_query_t,
+        results: *mut *mut *mut zvec_doc_t,
+        result_count: *mut usize,
+    ) -> zvec_error_code_t;
     pub fn zvec_collection_fetch(
         collection: *mut zvec_collection_t,
         primary_keys: *const *const c_char,
         count: usize,
+        output_fields: *const *const c_char,
+        output_field_count: usize,
+        include_vector: bool,
         documents: *mut *mut *mut zvec_doc_t,
         found_count: *mut usize,
     ) -> zvec_error_code_t;
@@ -1031,6 +1089,39 @@ extern "C" {
     ) -> bool;
 
     // -------------------------------------------------------------------------
+    // FTS Query Parameters
+    // Functions for creating and configuring FTS query parameters.
+    // -------------------------------------------------------------------------
+    pub fn zvec_query_params_fts_create(
+        default_operator: *const c_char,
+    ) -> *mut zvec_fts_query_params_t;
+    pub fn zvec_query_params_fts_destroy(params: *mut zvec_fts_query_params_t);
+    pub fn zvec_query_params_fts_set_default_operator(
+        params: *mut zvec_fts_query_params_t,
+        default_operator: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_query_params_fts_get_default_operator(
+        params: *const zvec_fts_query_params_t,
+    ) -> *const c_char;
+
+    // -------------------------------------------------------------------------
+    // FTS Query Payload
+    // Functions for creating and configuring FTS query payloads.
+    // -------------------------------------------------------------------------
+    pub fn zvec_fts_create() -> *mut zvec_fts_t;
+    pub fn zvec_fts_destroy(fts: *mut zvec_fts_t);
+    pub fn zvec_fts_set_query_string(
+        fts: *mut zvec_fts_t,
+        query_string: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_fts_set_match_string(
+        fts: *mut zvec_fts_t,
+        match_string: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_fts_get_query_string(fts: *const zvec_fts_t) -> *const c_char;
+    pub fn zvec_fts_get_match_string(fts: *const zvec_fts_t) -> *const c_char;
+
+    // -------------------------------------------------------------------------
     // Vector Query
     // Functions for creating and configuring vector similarity queries.
     // -------------------------------------------------------------------------
@@ -1092,6 +1183,15 @@ extern "C" {
         query: *mut zvec_vector_query_t,
         flat_params: *mut zvec_flat_query_params_t,
     ) -> zvec_error_code_t;
+    pub fn zvec_vector_query_set_fts_params(
+        query: *mut zvec_vector_query_t,
+        fts_params: *mut zvec_fts_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_vector_query_set_fts(
+        query: *mut zvec_vector_query_t,
+        fts: *const zvec_fts_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_vector_query_get_fts(query: *const zvec_vector_query_t) -> *const zvec_fts_t;
 
     // -------------------------------------------------------------------------
     // Group By Vector Query
@@ -1170,6 +1270,99 @@ extern "C" {
     ) -> zvec_error_code_t;
     pub fn zvec_group_by_vector_query_set_flat_params(
         query: *mut zvec_group_by_vector_query_t,
+        flat_params: *mut zvec_flat_query_params_t,
+    ) -> zvec_error_code_t;
+
+    // -------------------------------------------------------------------------
+    // Multi Query / Sub Query
+    // Functions for creating and configuring multi-queries (hybrid search with
+    // re-ranking) and their per-field sub-queries.
+    // -------------------------------------------------------------------------
+    pub fn zvec_multi_query_create() -> *mut zvec_multi_query_t;
+    pub fn zvec_multi_query_destroy(query: *mut zvec_multi_query_t);
+    pub fn zvec_multi_query_add_sub_query(
+        query: *mut zvec_multi_query_t,
+        sub_query: *const zvec_sub_query_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_get_sub_query_count(query: *const zvec_multi_query_t) -> usize;
+    pub fn zvec_multi_query_set_topk(
+        query: *mut zvec_multi_query_t,
+        topk: c_int,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_get_topk(query: *const zvec_multi_query_t) -> c_int;
+    pub fn zvec_multi_query_set_filter(
+        query: *mut zvec_multi_query_t,
+        filter: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_get_filter(query: *const zvec_multi_query_t) -> *const c_char;
+    pub fn zvec_multi_query_set_include_vector(
+        query: *mut zvec_multi_query_t,
+        include: bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_get_include_vector(query: *const zvec_multi_query_t) -> bool;
+    pub fn zvec_multi_query_set_output_fields(
+        query: *mut zvec_multi_query_t,
+        fields: *const *const c_char,
+        count: usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_get_output_fields(
+        query: *mut zvec_multi_query_t,
+        fields: *mut *mut *const c_char,
+        count: *mut usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_set_rerank_rrf(
+        query: *mut zvec_multi_query_t,
+        rank_constant: c_int,
+    ) -> zvec_error_code_t;
+    pub fn zvec_multi_query_set_rerank_weighted(
+        query: *mut zvec_multi_query_t,
+        weights: *const f64,
+        weight_count: usize,
+    ) -> zvec_error_code_t;
+
+    pub fn zvec_sub_query_create() -> *mut zvec_sub_query_t;
+    pub fn zvec_sub_query_destroy(query: *mut zvec_sub_query_t);
+    pub fn zvec_sub_query_set_num_candidates(
+        query: *mut zvec_sub_query_t,
+        num_candidates: c_int,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_get_num_candidates(query: *const zvec_sub_query_t) -> c_int;
+    pub fn zvec_sub_query_set_field_name(
+        query: *mut zvec_sub_query_t,
+        field_name: *const c_char,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_get_field_name(query: *const zvec_sub_query_t) -> *const c_char;
+    pub fn zvec_sub_query_set_query_vector(
+        query: *mut zvec_sub_query_t,
+        data: *const c_void,
+        size: usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_sparse_vector(
+        query: *mut zvec_sub_query_t,
+        indices: *const u32,
+        values: *const f32,
+        count: usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_sparse_indices(
+        query: *mut zvec_sub_query_t,
+        indices: *const u32,
+        count: usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_sparse_values(
+        query: *mut zvec_sub_query_t,
+        values: *const f32,
+        count: usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_hnsw_params(
+        query: *mut zvec_sub_query_t,
+        hnsw_params: *mut zvec_hnsw_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_ivf_params(
+        query: *mut zvec_sub_query_t,
+        ivf_params: *mut zvec_ivf_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_flat_params(
+        query: *mut zvec_sub_query_t,
         flat_params: *mut zvec_flat_query_params_t,
     ) -> zvec_error_code_t;
 

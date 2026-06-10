@@ -81,8 +81,8 @@ impl Doc {
         unsafe { zvec_sys::zvec_doc_get_score(self.handle) }
     }
 
-    /// Returns the document ID.
-    pub fn get_doc_id(&self) -> u64 {
+    #[allow(dead_code)]
+    pub(crate) fn get_doc_id(&self) -> u64 {
         unsafe { zvec_sys::zvec_doc_get_doc_id(self.handle) }
     }
 
@@ -302,6 +302,58 @@ impl Doc {
         })
     }
 
+    // =========================================================================
+    // Array field setters
+    // =========================================================================
+
+    fn add_typed_array<T>(&mut self, name: &str, data_type: DataType, values: &[T]) -> Result<()> {
+        let c_name = to_cstring(name)?;
+        check_error(unsafe {
+            zvec_sys::zvec_doc_add_field_by_value(
+                self.handle,
+                c_name.as_ptr(),
+                data_type as u32,
+                values.as_ptr() as *const c_void,
+                std::mem::size_of_val(values),
+            )
+        })
+    }
+
+    /// Adds an array of i32 values.
+    pub fn add_array_i32(&mut self, name: &str, values: &[i32]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayInt32, values)
+    }
+
+    /// Adds an array of i64 values.
+    pub fn add_array_i64(&mut self, name: &str, values: &[i64]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayInt64, values)
+    }
+
+    /// Adds an array of u32 values.
+    pub fn add_array_u32(&mut self, name: &str, values: &[u32]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayUint32, values)
+    }
+
+    /// Adds an array of u64 values.
+    pub fn add_array_u64(&mut self, name: &str, values: &[u64]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayUint64, values)
+    }
+
+    /// Adds an array of f32 values.
+    pub fn add_array_f32(&mut self, name: &str, values: &[f32]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayFloat, values)
+    }
+
+    /// Adds an array of f64 values.
+    pub fn add_array_f64(&mut self, name: &str, values: &[f64]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayDouble, values)
+    }
+
+    /// Adds an array of boolean values.
+    pub fn add_array_bool(&mut self, name: &str, values: &[bool]) -> Result<()> {
+        self.add_typed_array(name, DataType::ArrayBool, values)
+    }
+
     /// Sets a field to null.
     pub fn set_field_null(&mut self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
@@ -318,8 +370,33 @@ impl Doc {
     // Field getters
     // =========================================================================
 
-    /// Gets a string field value.
-    pub fn get_string(&self, name: &str) -> Result<String> {
+    fn get_basic_field<T: Copy + Default>(
+        &self,
+        name: &str,
+        data_type: DataType,
+    ) -> Result<Option<T>> {
+        if !self.has_field(name) || self.is_field_null(name) {
+            return Ok(None);
+        }
+        let c_name = to_cstring(name)?;
+        let mut value: T = T::default();
+        check_error(unsafe {
+            zvec_sys::zvec_doc_get_field_value_basic(
+                self.handle,
+                c_name.as_ptr(),
+                data_type as u32,
+                &mut value as *mut T as *mut c_void,
+                std::mem::size_of::<T>(),
+            )
+        })?;
+        Ok(Some(value))
+    }
+
+    fn get_pointer_field(
+        &self,
+        name: &str,
+        data_type: DataType,
+    ) -> Result<Option<(*const c_void, usize)>> {
         let c_name = to_cstring(name)?;
         let mut value_ptr: *const c_void = std::ptr::null();
         let mut value_size: usize = 0;
@@ -327,256 +404,144 @@ impl Doc {
             zvec_sys::zvec_doc_get_field_value_pointer(
                 self.handle,
                 c_name.as_ptr(),
-                DataType::String as u32,
+                data_type as u32,
                 &mut value_ptr,
                 &mut value_size,
             )
         })?;
-        if value_ptr.is_null() {
-            return Ok(String::new());
+        if value_ptr.is_null() || value_size == 0 {
+            return Ok(None);
         }
+        Ok(Some((value_ptr, value_size)))
+    }
+
+    fn get_typed_vec<T: Copy>(&self, name: &str, data_type: DataType) -> Result<Option<Vec<T>>> {
+        let Some((ptr, size)) = self.get_pointer_field(name, data_type)? else {
+            return Ok(None);
+        };
+        let elem_size = std::mem::size_of::<T>();
+        if elem_size > 1 && size % elem_size != 0 {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: format!(
+                    "data size {} is not aligned to element size {}",
+                    size, elem_size
+                ),
+            });
+        }
+        let count = size / elem_size;
+        let slice = unsafe { std::slice::from_raw_parts(ptr as *const T, count) };
+        Ok(Some(slice.to_vec()))
+    }
+
+    /// Gets a string field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_string(&self, name: &str) -> Result<Option<String>> {
+        let Some((ptr, _size)) = self.get_pointer_field(name, DataType::String)? else {
+            return Ok(None);
+        };
         unsafe {
-            let cstr = CStr::from_ptr(value_ptr as *const std::os::raw::c_char);
-            Ok(cstr.to_string_lossy().into_owned())
+            let cstr = CStr::from_ptr(ptr as *const std::os::raw::c_char);
+            Ok(Some(cstr.to_string_lossy().into_owned()))
         }
     }
 
-    /// Gets a boolean field value.
-    pub fn get_bool(&self, name: &str) -> Result<bool> {
-        let c_name = to_cstring(name)?;
-        let mut value: bool = false;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Bool as u32,
-                &mut value as *mut bool as *mut c_void,
-                std::mem::size_of::<bool>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets a boolean field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_bool(&self, name: &str) -> Result<Option<bool>> {
+        self.get_basic_field(name, DataType::Bool)
     }
 
-    /// Gets an i32 field value.
-    pub fn get_i32(&self, name: &str) -> Result<i32> {
-        let c_name = to_cstring(name)?;
-        let mut value: i32 = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Int32 as u32,
-                &mut value as *mut i32 as *mut c_void,
-                std::mem::size_of::<i32>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets an i32 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_i32(&self, name: &str) -> Result<Option<i32>> {
+        self.get_basic_field(name, DataType::Int32)
     }
 
-    /// Gets an i64 field value.
-    pub fn get_i64(&self, name: &str) -> Result<i64> {
-        let c_name = to_cstring(name)?;
-        let mut value: i64 = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Int64 as u32,
-                &mut value as *mut i64 as *mut c_void,
-                std::mem::size_of::<i64>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets an i64 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_i64(&self, name: &str) -> Result<Option<i64>> {
+        self.get_basic_field(name, DataType::Int64)
     }
 
-    /// Gets a u32 field value.
-    pub fn get_u32(&self, name: &str) -> Result<u32> {
-        let c_name = to_cstring(name)?;
-        let mut value: u32 = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Uint32 as u32,
-                &mut value as *mut u32 as *mut c_void,
-                std::mem::size_of::<u32>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets a u32 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_u32(&self, name: &str) -> Result<Option<u32>> {
+        self.get_basic_field(name, DataType::Uint32)
     }
 
-    /// Gets a u64 field value.
-    pub fn get_u64(&self, name: &str) -> Result<u64> {
-        let c_name = to_cstring(name)?;
-        let mut value: u64 = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Uint64 as u32,
-                &mut value as *mut u64 as *mut c_void,
-                std::mem::size_of::<u64>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets a u64 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_u64(&self, name: &str) -> Result<Option<u64>> {
+        self.get_basic_field(name, DataType::Uint64)
     }
 
-    /// Gets an f32 field value.
-    pub fn get_f32(&self, name: &str) -> Result<f32> {
-        let c_name = to_cstring(name)?;
-        let mut value: f32 = 0.0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Float as u32,
-                &mut value as *mut f32 as *mut c_void,
-                std::mem::size_of::<f32>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets an f32 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_f32(&self, name: &str) -> Result<Option<f32>> {
+        self.get_basic_field(name, DataType::Float)
     }
 
-    /// Gets an f64 field value.
-    pub fn get_f64(&self, name: &str) -> Result<f64> {
-        let c_name = to_cstring(name)?;
-        let mut value: f64 = 0.0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Double as u32,
-                &mut value as *mut f64 as *mut c_void,
-                std::mem::size_of::<f64>(),
-            )
-        })?;
-        Ok(value)
+    /// Gets an f64 field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_f64(&self, name: &str) -> Result<Option<f64>> {
+        self.get_basic_field(name, DataType::Double)
     }
 
-    /// Gets a dense FP32 vector field value.
-    pub fn get_vector_f32(&self, name: &str) -> Result<Vec<f32>> {
-        let c_name = to_cstring(name)?;
-        let mut value_ptr: *const c_void = std::ptr::null();
-        let mut value_size: usize = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::VectorFp32 as u32,
-                &mut value_ptr,
-                &mut value_size,
-            )
-        })?;
-        if value_ptr.is_null() || value_size == 0 {
-            return Ok(Vec::new());
-        }
-        if value_size % std::mem::size_of::<f32>() != 0 {
-            return Err(Error {
-                code: ErrorCode::InternalError,
-                message: "vector data size is not aligned to f32".into(),
-            });
-        }
-        let count = value_size / std::mem::size_of::<f32>();
-        let slice = unsafe { std::slice::from_raw_parts(value_ptr as *const f32, count) };
-        Ok(slice.to_vec())
+    /// Gets a dense FP32 vector field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_vector_f32(&self, name: &str) -> Result<Option<Vec<f32>>> {
+        self.get_typed_vec(name, DataType::VectorFp32)
     }
 
-    /// Gets a dense FP64 vector field value.
-    pub fn get_vector_f64(&self, name: &str) -> Result<Vec<f64>> {
-        let c_name = to_cstring(name)?;
-        let mut value_ptr: *const c_void = std::ptr::null();
-        let mut value_size: usize = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::VectorFp64 as u32,
-                &mut value_ptr,
-                &mut value_size,
-            )
-        })?;
-        if value_ptr.is_null() || value_size == 0 {
-            return Ok(Vec::new());
-        }
-        if value_size % std::mem::size_of::<f64>() != 0 {
-            return Err(Error {
-                code: ErrorCode::InternalError,
-                message: "vector data size is not aligned to f64".into(),
-            });
-        }
-        let count = value_size / std::mem::size_of::<f64>();
-        let slice = unsafe { std::slice::from_raw_parts(value_ptr as *const f64, count) };
-        Ok(slice.to_vec())
+    /// Gets a dense FP64 vector field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_vector_f64(&self, name: &str) -> Result<Option<Vec<f64>>> {
+        self.get_typed_vec(name, DataType::VectorFp64)
     }
 
-    /// Gets a binary (raw bytes) field value.
-    pub fn get_binary(&self, name: &str) -> Result<Vec<u8>> {
-        let c_name = to_cstring(name)?;
-        let mut value_ptr: *const c_void = std::ptr::null();
-        let mut value_size: usize = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::Binary as u32,
-                &mut value_ptr,
-                &mut value_size,
-            )
-        })?;
-        if value_ptr.is_null() || value_size == 0 {
-            return Ok(Vec::new());
-        }
-        let slice = unsafe { std::slice::from_raw_parts(value_ptr as *const u8, value_size) };
-        Ok(slice.to_vec())
+    /// Gets a binary (raw bytes) field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_binary(&self, name: &str) -> Result<Option<Vec<u8>>> {
+        self.get_typed_vec(name, DataType::Binary)
     }
 
-    /// Gets a dense INT8 vector field value.
-    pub fn get_vector_i8(&self, name: &str) -> Result<Vec<i8>> {
-        let c_name = to_cstring(name)?;
-        let mut value_ptr: *const c_void = std::ptr::null();
-        let mut value_size: usize = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::VectorInt8 as u32,
-                &mut value_ptr,
-                &mut value_size,
-            )
-        })?;
-        if value_ptr.is_null() || value_size == 0 {
-            return Ok(Vec::new());
-        }
-        let slice = unsafe { std::slice::from_raw_parts(value_ptr as *const i8, value_size) };
-        Ok(slice.to_vec())
+    /// Gets a dense INT8 vector field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_vector_i8(&self, name: &str) -> Result<Option<Vec<i8>>> {
+        self.get_typed_vec(name, DataType::VectorInt8)
     }
 
-    /// Gets a dense INT16 vector field value.
-    pub fn get_vector_i16(&self, name: &str) -> Result<Vec<i16>> {
-        let c_name = to_cstring(name)?;
-        let mut value_ptr: *const c_void = std::ptr::null();
-        let mut value_size: usize = 0;
-        check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
-                self.handle,
-                c_name.as_ptr(),
-                DataType::VectorInt16 as u32,
-                &mut value_ptr,
-                &mut value_size,
-            )
-        })?;
-        if value_ptr.is_null() || value_size == 0 {
-            return Ok(Vec::new());
-        }
-        if value_size % std::mem::size_of::<i16>() != 0 {
-            return Err(Error {
-                code: ErrorCode::InternalError,
-                message: "vector data size is not aligned to i16".into(),
-            });
-        }
-        let count = value_size / std::mem::size_of::<i16>();
-        let slice = unsafe { std::slice::from_raw_parts(value_ptr as *const i16, count) };
-        Ok(slice.to_vec())
+    /// Gets a dense INT16 vector field value. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_vector_i16(&self, name: &str) -> Result<Option<Vec<i16>>> {
+        self.get_typed_vec(name, DataType::VectorInt16)
+    }
+
+    // =========================================================================
+    // Array field getters
+    // =========================================================================
+
+    /// Gets an array of i32 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_i32(&self, name: &str) -> Result<Option<Vec<i32>>> {
+        self.get_typed_vec(name, DataType::ArrayInt32)
+    }
+
+    /// Gets an array of i64 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_i64(&self, name: &str) -> Result<Option<Vec<i64>>> {
+        self.get_typed_vec(name, DataType::ArrayInt64)
+    }
+
+    /// Gets an array of u32 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_u32(&self, name: &str) -> Result<Option<Vec<u32>>> {
+        self.get_typed_vec(name, DataType::ArrayUint32)
+    }
+
+    /// Gets an array of u64 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_u64(&self, name: &str) -> Result<Option<Vec<u64>>> {
+        self.get_typed_vec(name, DataType::ArrayUint64)
+    }
+
+    /// Gets an array of f32 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_f32(&self, name: &str) -> Result<Option<Vec<f32>>> {
+        self.get_typed_vec(name, DataType::ArrayFloat)
+    }
+
+    /// Gets an array of f64 values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_f64(&self, name: &str) -> Result<Option<Vec<f64>>> {
+        self.get_typed_vec(name, DataType::ArrayDouble)
+    }
+
+    /// Gets an array of boolean values. Returns `Ok(None)` if the field does not exist or is null.
+    pub fn get_array_bool(&self, name: &str) -> Result<Option<Vec<bool>>> {
+        self.get_typed_vec(name, DataType::ArrayBool)
     }
 
     /// Clears all fields from the document.

@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use std::sync::Once;
-use zvec::{FlatQueryParams, HnswQueryParams, IvfQueryParams, VectorQuery};
+use zvec::{FlatQueryParams, HnswQueryParams, IvfQueryParams, SearchQuery};
 
 static INIT: Once = Once::new();
 
@@ -54,9 +54,9 @@ fuzz_target!(|input: FuzzInput| {
     // Limit topk to prevent memory issues (reasonable upper bound)
     let safe_topk = topk.clamp(1, 10000);
 
-    let _ = VectorQuery::new(&safe_field_name, &vector_data, safe_topk);
+    let _ = SearchQuery::new(&safe_field_name, &vector_data, safe_topk);
 
-    let mut builder = VectorQuery::builder()
+    let mut builder = SearchQuery::builder()
         .field_name(&safe_field_name)
         .vector(&vector_data)
         .topk(safe_topk);

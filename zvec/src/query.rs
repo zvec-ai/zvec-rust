@@ -90,27 +90,145 @@ impl Drop for FlatQueryParams {
     }
 }
 
+/// FTS-specific query parameters controlling the default boolean operator.
+pub struct FtsQueryParams {
+    pub(crate) handle: *mut zvec_sys::zvec_fts_query_params_t,
+}
+
+impl FtsQueryParams {
+    /// Creates new FTS query parameters.
+    ///
+    /// `default_operator` sets the boolean operator for adjacent bare terms
+    /// ("OR" or "AND", case-insensitive). Pass `None` to use the library default.
+    pub fn new(default_operator: Option<&str>) -> Result<Self> {
+        let c_op = default_operator.map(to_cstring).transpose()?;
+        let handle = unsafe {
+            zvec_sys::zvec_query_params_fts_create(
+                c_op.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+            )
+        };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create FTS query params".into(),
+            });
+        }
+        Ok(FtsQueryParams { handle })
+    }
+
+    /// Sets the default boolean operator.
+    pub fn set_default_operator(&mut self, op: &str) -> Result<()> {
+        let c_op = to_cstring(op)?;
+        check_error(unsafe {
+            zvec_sys::zvec_query_params_fts_set_default_operator(self.handle, c_op.as_ptr())
+        })
+    }
+
+    /// Returns the default boolean operator.
+    pub fn default_operator(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_query_params_fts_get_default_operator(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
+impl Drop for FtsQueryParams {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { zvec_sys::zvec_query_params_fts_destroy(self.handle) };
+        }
+    }
+}
+
+/// FTS query payload holding the query expression and match string.
+///
+/// - `query_string`: a boolean / advanced query expression
+/// - `match_string`: a natural-language match string
+pub struct Fts {
+    pub(crate) handle: *mut zvec_sys::zvec_fts_t,
+}
+
+impl Fts {
+    /// Creates a new FTS query payload.
+    pub fn new() -> Result<Self> {
+        let handle = unsafe { zvec_sys::zvec_fts_create() };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create FTS payload".into(),
+            });
+        }
+        Ok(Fts { handle })
+    }
+
+    /// Sets the boolean / advanced query expression.
+    pub fn set_query_string(&mut self, query: &str) -> Result<()> {
+        let c = to_cstring(query)?;
+        check_error(unsafe { zvec_sys::zvec_fts_set_query_string(self.handle, c.as_ptr()) })
+    }
+
+    /// Sets the natural-language match string.
+    pub fn set_match_string(&mut self, match_str: &str) -> Result<()> {
+        let c = to_cstring(match_str)?;
+        check_error(unsafe { zvec_sys::zvec_fts_set_match_string(self.handle, c.as_ptr()) })
+    }
+
+    /// Returns the query expression, or `None` if not set.
+    pub fn query_string(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_fts_get_query_string(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+
+    /// Returns the match string, or `None` if not set.
+    pub fn match_string(&self) -> Option<String> {
+        unsafe {
+            let ptr = zvec_sys::zvec_fts_get_match_string(self.handle);
+            if ptr.is_null() {
+                return None;
+            }
+            Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
+impl Drop for Fts {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { zvec_sys::zvec_fts_destroy(self.handle) };
+        }
+    }
+}
+
 /// A vector similarity search query.
-pub struct VectorQuery {
+pub struct SearchQuery {
     pub(crate) handle: *mut zvec_sys::zvec_vector_query_t,
 }
 
-impl VectorQuery {
+impl SearchQuery {
     /// Returns the raw FFI handle.
     ///
     /// # Safety
-    /// The caller must not use the handle after the `VectorQuery` is dropped.
+    /// The caller must not use the handle after the `SearchQuery` is dropped.
     pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_vector_query_t {
         self.handle
     }
 
-    /// Creates a `VectorQuery` from a raw FFI handle.
+    /// Creates a `SearchQuery` from a raw FFI handle.
     ///
     /// # Safety
     /// The caller must ensure the handle is valid and was created by the zvec C API.
-    /// The `VectorQuery` takes ownership and will call `zvec_vector_query_destroy` on drop.
+    /// The `SearchQuery` takes ownership and will call `zvec_vector_query_destroy` on drop.
     pub unsafe fn from_raw(handle: *mut zvec_sys::zvec_vector_query_t) -> Self {
-        VectorQuery { handle }
+        SearchQuery { handle }
     }
 
     /// Creates a new vector query with the given field name, query vector, and topk.
@@ -124,7 +242,7 @@ impl VectorQuery {
         }
 
         let c_field = to_cstring(field_name)?;
-        let query = VectorQuery { handle };
+        let query = SearchQuery { handle };
 
         check_error(unsafe {
             zvec_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
@@ -141,9 +259,9 @@ impl VectorQuery {
         Ok(query)
     }
 
-    /// Returns a builder for constructing a vector query.
-    pub fn builder() -> VectorQueryBuilder {
-        VectorQueryBuilder::new()
+    /// Returns a builder for constructing a search query.
+    pub fn builder() -> SearchQueryBuilder {
+        SearchQueryBuilder::new()
     }
 
     /// Sets the filter expression.
@@ -207,9 +325,23 @@ impl VectorQuery {
         params.handle = std::ptr::null_mut();
         Ok(())
     }
+
+    /// Sets FTS query parameters (takes ownership on success).
+    pub fn set_fts_params(&mut self, mut params: FtsQueryParams) -> Result<()> {
+        check_error(unsafe {
+            zvec_sys::zvec_vector_query_set_fts_params(self.handle, params.handle)
+        })?;
+        params.handle = std::ptr::null_mut();
+        Ok(())
+    }
+
+    /// Sets FTS payload (payload is copied, caller retains ownership).
+    pub fn set_fts(&mut self, fts: &Fts) -> Result<()> {
+        check_error(unsafe { zvec_sys::zvec_vector_query_set_fts(self.handle, fts.handle) })
+    }
 }
 
-impl Drop for VectorQuery {
+impl Drop for SearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             unsafe { zvec_sys::zvec_vector_query_destroy(self.handle) };
@@ -217,8 +349,8 @@ impl Drop for VectorQuery {
     }
 }
 
-/// Builder for constructing a [`VectorQuery`].
-pub struct VectorQueryBuilder {
+/// Builder for constructing a [`SearchQuery`].
+pub struct SearchQueryBuilder {
     field_name: Option<String>,
     vector: Option<Vec<f32>>,
     topk: i32,
@@ -226,11 +358,13 @@ pub struct VectorQueryBuilder {
     include_vector: Option<bool>,
     include_doc_id: Option<bool>,
     output_fields: Option<Vec<String>>,
+    fts_query_string: Option<String>,
+    fts_match_string: Option<String>,
 }
 
-impl VectorQueryBuilder {
+impl SearchQueryBuilder {
     fn new() -> Self {
-        VectorQueryBuilder {
+        SearchQueryBuilder {
             field_name: None,
             vector: None,
             topk: 10,
@@ -238,6 +372,8 @@ impl VectorQueryBuilder {
             include_vector: None,
             include_doc_id: None,
             output_fields: None,
+            fts_query_string: None,
+            fts_match_string: None,
         }
     }
 
@@ -283,8 +419,20 @@ impl VectorQueryBuilder {
         self
     }
 
-    /// Builds the vector query.
-    pub fn build(self) -> Result<VectorQuery> {
+    /// Sets the FTS boolean / advanced query expression.
+    pub fn fts_query_string(mut self, query: &str) -> Self {
+        self.fts_query_string = Some(query.to_string());
+        self
+    }
+
+    /// Sets the FTS natural-language match string.
+    pub fn fts_match_string(mut self, match_str: &str) -> Self {
+        self.fts_match_string = Some(match_str.to_string());
+        self
+    }
+
+    /// Builds the search query.
+    pub fn build(self) -> Result<SearchQuery> {
         let field_name = self.field_name.ok_or_else(|| Error {
             code: ErrorCode::InvalidArgument,
             message: "field_name is required".into(),
@@ -294,7 +442,7 @@ impl VectorQueryBuilder {
             message: "vector is required".into(),
         })?;
 
-        let mut query = VectorQuery::new(&field_name, &vector, self.topk)?;
+        let mut query = SearchQuery::new(&field_name, &vector, self.topk)?;
 
         if let Some(filter) = &self.filter {
             query.set_filter(filter)?;
@@ -309,18 +457,28 @@ impl VectorQueryBuilder {
             let field_refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
             query.set_output_fields(&field_refs)?;
         }
+        if self.fts_query_string.is_some() || self.fts_match_string.is_some() {
+            let mut fts = Fts::new()?;
+            if let Some(qs) = &self.fts_query_string {
+                fts.set_query_string(qs)?;
+            }
+            if let Some(ms) = &self.fts_match_string {
+                fts.set_match_string(ms)?;
+            }
+            query.set_fts(&fts)?;
+        }
 
         Ok(query)
     }
 }
 
 /// A grouped vector similarity search query.
-pub struct GroupByVectorQuery {
+pub struct GroupBySearchQuery {
     pub(crate) handle: *mut zvec_sys::zvec_group_by_vector_query_t,
 }
 
-impl GroupByVectorQuery {
-    /// Creates a new group-by vector query.
+impl GroupBySearchQuery {
+    /// Creates a new group-by search query.
     pub fn new(
         field_name: &str,
         group_by_field: &str,
@@ -362,7 +520,7 @@ impl GroupByVectorQuery {
             zvec_sys::zvec_group_by_vector_query_set_group_topk(handle, group_topk)
         })?;
 
-        Ok(GroupByVectorQuery { handle })
+        Ok(GroupBySearchQuery { handle })
     }
 
     /// Sets the filter expression.
@@ -427,7 +585,7 @@ impl GroupByVectorQuery {
     }
 }
 
-impl Drop for GroupByVectorQuery {
+impl Drop for GroupBySearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             unsafe { zvec_sys::zvec_group_by_vector_query_destroy(self.handle) };
@@ -441,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_default_values() {
-        let builder = VectorQueryBuilder::new();
+        let builder = SearchQueryBuilder::new();
         assert!(builder.field_name.is_none());
         assert!(builder.vector.is_none());
         assert_eq!(builder.topk, 10);
@@ -453,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_setters() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0, 2.0, 3.0])
             .topk(5)
@@ -476,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_build_missing_field_name() {
-        let builder = VectorQueryBuilder::new().vector(&[1.0, 2.0, 3.0]);
+        let builder = SearchQueryBuilder::new().vector(&[1.0, 2.0, 3.0]);
 
         let result = builder.build();
         assert!(result.is_err());
@@ -488,7 +646,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_build_missing_vector() {
-        let builder = VectorQueryBuilder::new().field_name("test_field");
+        let builder = SearchQueryBuilder::new().field_name("test_field");
 
         let result = builder.build();
         assert!(result.is_err());
@@ -500,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_builder_method() {
-        let builder = VectorQuery::builder();
+        let builder = SearchQuery::builder();
         assert!(builder.field_name.is_none());
         assert!(builder.vector.is_none());
         assert_eq!(builder.topk, 10);
@@ -508,7 +666,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_partial_setters() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0, 2.0])
             .filter("status = 'active'");
@@ -521,7 +679,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_empty_vector() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[]);
         assert_eq!(builder.vector, Some(vec![]));
@@ -529,7 +687,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_empty_output_fields() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .output_fields(&[]);
@@ -538,7 +696,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_topk_zero() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .topk(0);
@@ -547,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_topk_negative() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&[1.0])
             .topk(-1);
@@ -556,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_vector_query_builder_overwrite_field_name() {
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("first_field")
             .field_name("second_field");
         assert_eq!(builder.field_name, Some("second_field".to_string()));
@@ -565,7 +723,7 @@ mod tests {
     #[test]
     fn test_vector_query_builder_large_vector() {
         let large_vector: Vec<f32> = (0..1024).map(|i| i as f32).collect();
-        let builder = VectorQueryBuilder::new()
+        let builder = SearchQueryBuilder::new()
             .field_name("test_field")
             .vector(&large_vector);
         assert_eq!(builder.vector.as_ref().unwrap().len(), 1024);
