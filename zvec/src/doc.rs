@@ -122,7 +122,11 @@ impl Doc {
     pub fn add_string(&mut self, name: &str, value: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
         let c_value = to_cstring(value)?;
-        let bytes = c_value.as_bytes_with_nul();
+        // The C API `zvec_doc_add_field_by_value` is length-delimited: it stores
+        // exactly `size` bytes. Use `as_bytes()` (without the trailing NUL) so the
+        // stored value is the string itself; sending `as_bytes_with_nul()` would
+        // append a NUL to the stored data and break exact string filters.
+        let bytes = c_value.as_bytes();
         check_error(unsafe {
             zvec_sys::zvec_doc_add_field_by_value(
                 self.handle,
