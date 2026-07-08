@@ -49,10 +49,8 @@ jobs:
           echo "All versions match: $VERSION"
         shell: bash
 
-      - name: Dry-run publish to crates.io
-        run: |
-          cargo publish -p zvec-rust-sys --dry-run
-          cargo publish -p zvec-rust --dry-run
+      - name: Dry-run publish zvec-rust-sys
+        run: cargo publish -p zvec-rust-sys --dry-run
         shell: bash
 
       - name: Publish zvec-rust-sys to crates.io
@@ -73,6 +71,10 @@ jobs:
           done
           echo "Timeout waiting for zvec-rust-sys $VERSION on crates.io"
           exit 1
+        shell: bash
+
+      - name: Dry-run publish zvec-rust
+        run: cargo publish -p zvec-rust --dry-run
         shell: bash
 
       - name: Publish zvec-rust to crates.io
