@@ -27,8 +27,6 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 | **Windows** | x86_64 (MSVC) | ✅ Clippy + Test | CMake + MSVC toolchain |
 
 > The dynamic library name varies by platform: `libzvec_c_api.dylib` (macOS), `libzvec_c_api.so` (Linux), `zvec_c_api.dll` (Windows).
->
-> **Windows users:** The prebuilt `zvec_c_api.dll` is compiled with `/MD` and requires the [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) to be installed. If you see `STATUS_DLL_NOT_FOUND (0xc0000135)`, install the Redistributable and restart your terminal.
 
 ## Architecture
 

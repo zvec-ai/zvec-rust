@@ -43,8 +43,8 @@ jobs:
         env:
           ZVEC_AUTO_BUILD: "0"
 
-  clippy:
-    name: Clippy (${{ matrix.platform }})
+  check-and-test:
+    name: Check & Test (${{ matrix.platform }})
     needs: [fmt, msrv]
     strategy:
       fail-fast: false
@@ -106,7 +106,7 @@ jobs:
             NPROC=$(nproc 2>/dev/null || echo 2)
           fi
 
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
           cmake --build . --config Release --parallel "$NPROC"
         shell: bash
 
@@ -184,141 +184,6 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
         shell: bash
 
-  test:
-    name: Test (${{ matrix.platform }})
-    needs: clippy
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            os: macos-15
-          # - platform: macos-x64
-          #   os: macos-13
-          - platform: linux-x64
-            os: ubuntu-24.04
-          - platform: linux-arm64
-            os: ubuntu-24.04-arm
-          - platform: windows-x64
-            os: windows-latest
-    runs-on: ${{ matrix.os }}
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ matrix.platform }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ matrix.platform }}-cargo-
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libaio-dev
-        shell: bash
-
-      - name: Clone and build zvec C library (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
-          cd ../zvec
-          mkdir -p build && cd build
-
-          if [[ "${{ matrix.platform }}" == macos-* ]]; then
-            NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
-          else
-            NPROC=$(nproc 2>/dev/null || echo 2)
-          fi
-
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF
-          cmake --build . --config Release --parallel "$NPROC"
-        shell: bash
-
-      - name: Setup MSVC environment
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Fix link.exe conflict with Git Bash
-        if: runner.os == 'Windows'
-        run: |
-          if (Test-Path "C:\Program Files\Git\usr\bin\link.exe") {
-            Rename-Item "C:\Program Files\Git\usr\bin\link.exe" "link_git.exe"
-            Write-Host "Renamed Git link.exe to avoid MSVC linker conflict"
-          }
-        shell: pwsh
-
-      - name: Clone and build zvec C library (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
-          cd ../zvec
-          mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
-          cmake --build . --config Release --parallel
-        shell: bash
-        env:
-          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-          MSYS_NO_PATHCONV: 1
-
-      - name: Set library path (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
-          echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
-
-          if [[ "${{ matrix.platform }}" == macos-* ]]; then
-            echo "DYLD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
-          else
-            echo "LD_LIBRARY_PATH=$ZVEC_LIB_DIR" >> $GITHUB_ENV
-          fi
-        shell: bash
-
-      - name: Set library path (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          # Collect all .lib and .dll files so we can find the actual output location
-          Write-Host "Searching for zvec_c_api library files..."
-          $found = Get-ChildItem -Path "../zvec/build" -Recurse -Include "zvec_c_api.lib","zvec_c_api.dll" -ErrorAction SilentlyContinue
-          foreach ($f in $found) { Write-Host "  Found: $($f.FullName)" }
-
-          # Create a canonical lib directory and copy all library files there
-          $canonicalDir = (Resolve-Path "../zvec/build").Path + "\lib"
-          New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
-
-          foreach ($f in $found) {
-            if ($f.DirectoryName -ne $canonicalDir) {
-              Copy-Item $f.FullName -Destination $canonicalDir -Force
-              Write-Host "  Copied $($f.Name) -> $canonicalDir"
-            } else {
-              Write-Host "  Already in place: $($f.Name)"
-            }
-          }
-
-          if (Test-Path "$canonicalDir\zvec_c_api.lib") {
-            Write-Host "Library directory: $canonicalDir"
-            echo "ZVEC_LIB_DIR=$canonicalDir" >> $env:GITHUB_ENV
-            echo "$canonicalDir" >> $env:GITHUB_PATH
-          } else {
-            Write-Host "::error::Could not find zvec_c_api.lib anywhere under ../zvec/build"
-            exit 1
-          }
-        shell: pwsh
-
       - name: Run unit tests
         run: cargo test --workspace --lib -- --nocapture
         shell: bash
@@ -337,7 +202,7 @@ jobs:
 
   audit:
     name: Security Audit
-    needs: test
+    needs: check-and-test
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
