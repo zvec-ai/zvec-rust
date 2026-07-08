@@ -52,7 +52,7 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ```toml
 [dependencies]
-zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", features = ["bundled"] }
+zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.1", features = ["bundled"] }
 ```
 
 ### 方案二：自行编译

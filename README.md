@@ -52,7 +52,7 @@ Enable the `bundled` feature and `build.rs` will automatically download the preb
 
 ```toml
 [dependencies]
-zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", features = ["bundled"] }
+zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.1", features = ["bundled"] }
 ```
 
 ### Option 2: Custom Build
