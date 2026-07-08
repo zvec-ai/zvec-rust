@@ -259,6 +259,37 @@ impl SearchQuery {
         Ok(query)
     }
 
+    /// Creates a pure full-text (keyword-only) search query with no dense vector.
+    ///
+    /// [`SearchQuery::new`] and [`SearchQueryBuilder::build`] both require a query
+    /// vector, so an FTS clause can only ever be layered on top of a dense vector
+    /// (hybrid search). This constructor reaches the C API's vector-less FTS path:
+    /// once an FTS payload is attached, the underlying `zvec_vector_query` does not
+    /// require a query vector, enabling keyword-only retrieval.
+    ///
+    /// `field_name` must be the FTS-indexed field.
+    pub fn fts(field_name: &str, fts: &Fts, topk: i32) -> Result<Self> {
+        let handle = unsafe { zvec_rust_sys::zvec_vector_query_create() };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create vector query".into(),
+            });
+        }
+
+        // Wrap the handle before any fallible call so `Drop` frees it on early return.
+        let mut query = SearchQuery { handle };
+        let c_field = to_cstring(field_name)?;
+
+        check_error(unsafe {
+            zvec_rust_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
+        })?;
+        check_error(unsafe { zvec_rust_sys::zvec_vector_query_set_topk(query.handle, topk) })?;
+        query.set_fts(fts)?;
+
+        Ok(query)
+    }
+
     /// Returns a builder for constructing a search query.
     pub fn builder() -> SearchQueryBuilder {
         SearchQueryBuilder::new()
@@ -731,5 +762,21 @@ mod tests {
             .field_name("test_field")
             .vector(&large_vector);
         assert_eq!(builder.vector.as_ref().unwrap().len(), 1024);
+    }
+
+    #[test]
+    fn test_fts_query_no_vector() {
+        // A pure FTS query must build without a query vector; the builder path
+        // (which requires `vector`) cannot express this.
+        let mut fts = Fts::new().expect("create fts payload");
+        fts.set_match_string("hello world")
+            .expect("set match string");
+
+        let query = SearchQuery::fts("content", &fts, 10);
+        assert!(
+            query.is_ok(),
+            "pure FTS query should build without a vector"
+        );
+        assert!(!unsafe { query.unwrap().as_raw() }.is_null());
     }
 }
