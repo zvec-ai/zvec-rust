@@ -312,7 +312,7 @@ jobs:
         shell: bash
 
       - name: Run integration tests
-        run: cargo test --workspace --test '*' -- --nocapture
+        run: cargo test --workspace --tests -- --nocapture
         shell: bash
 
       - name: Run doc tests
