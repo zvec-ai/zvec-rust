@@ -91,18 +91,3 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.tag, 'alpha') || contains(steps.version.outputs.tag, 'beta') || contains(steps.version.outputs.tag, 'rc') }}
           files: prebuilt-artifacts/**/*.tar.gz
 
-      - name: Publish to crates.io
-        run: |
-          # Wait a moment for the release assets to be available
-          sleep 10
-
-          # First publish zvec-rust-sys (no dependencies)
-          cargo publish -p zvec-rust-sys --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-
-          # Wait for crates.io to index zvec-rust-sys
-          sleep 30
-
-          # Then publish zvec-rust (depends on zvec-rust-sys)
-          cargo publish -p zvec-rust --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
-        continue-on-error: true
-        shell: bash

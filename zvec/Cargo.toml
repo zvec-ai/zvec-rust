@@ -14,7 +14,7 @@ categories = ["database", "api-bindings"]
 zvec-rust-sys = { path = "../zvec-sys", version = "0.5.1" }
 
 [features]
-default = []
+default = ["bundled"]
 bundled = ["zvec-rust-sys/bundled"]
 
 [package.metadata.docs.rs]

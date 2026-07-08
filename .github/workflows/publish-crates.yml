@@ -1,0 +1,80 @@
+name: Publish to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v0.5.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Cargo.toml versions match tag
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+
+          extract_version() {
+            local file="$1"
+            local ver=$(grep '^version' "$file" | head -1 | sed 's/.*"\(.*\)"/\1/')
+            if [ "$ver" = "version.workspace = true" ]; then
+              ver=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+            fi
+            echo "$ver"
+          }
+
+          SYS_VERSION=$(extract_version zvec-sys/Cargo.toml)
+          SDK_VERSION=$(extract_version zvec/Cargo.toml)
+
+          if [ "$SYS_VERSION" != "$VERSION" ] || [ "$SDK_VERSION" != "$VERSION" ]; then
+            echo "Version mismatch!"
+            echo "  Tag: $VERSION"
+            echo "  zvec-rust-sys: $SYS_VERSION"
+            echo "  zvec-rust: $SDK_VERSION"
+            exit 1
+          fi
+          echo "All versions match: $VERSION"
+        shell: bash
+
+      - name: Dry-run publish to crates.io
+        run: |
+          cargo publish -p zvec-rust-sys --dry-run
+          cargo publish -p zvec-rust --dry-run
+        shell: bash
+
+      - name: Publish zvec-rust-sys to crates.io
+        run: cargo publish -p zvec-rust-sys --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        shell: bash
+
+      - name: Wait for zvec-rust-sys on crates.io
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          for i in {1..30}; do
+            if cargo search zvec-rust-sys --limit 1 | grep -q "zvec-rust-sys.*=.*\"$VERSION\""; then
+              echo "zvec-rust-sys $VERSION found on crates.io"
+              exit 0
+            fi
+            echo "Waiting for zvec-rust-sys $VERSION to appear on crates.io... ($i/30)"
+            sleep 10
+          done
+          echo "Timeout waiting for zvec-rust-sys $VERSION on crates.io"
+          exit 1
+        shell: bash
+
+      - name: Publish zvec-rust to crates.io
+        run: cargo publish -p zvec-rust --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        shell: bash

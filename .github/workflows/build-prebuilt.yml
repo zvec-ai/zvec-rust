@@ -60,10 +60,9 @@ jobs:
 
       - name: Clone zvec
         run: |
-          git clone --branch ${{ inputs.zvec_ref || 'main' }} \
+          git clone --depth 1 --branch ${{ inputs.zvec_ref || 'main' }} \
+            --recurse-submodules --shallow-submodules \
             https://github.com/alibaba/zvec.git ../zvec
-          cd ../zvec
-          git submodule update --init --recursive
         shell: bash
 
       # Use manylinux_2_28 container for Linux x64 to ensure broad GLIBC compatibility
@@ -122,6 +121,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           MSYS_NO_PATHCONV: 1
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: |
           cd ../zvec
           python -m pip install ninja
