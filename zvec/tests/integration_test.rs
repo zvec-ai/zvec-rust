@@ -1034,3 +1034,96 @@ fn test_collection_multi_query_with_filter_and_output_fields() {
         assert!(doc.has_field("category"));
     }
 }
+
+#[test]
+fn test_collection_multi_query_fts_vector_hybrid() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let dir = tmp_dir.path().join("zvec_data");
+
+    // Schema with both vector and FTS fields
+    let schema = CollectionSchema::builder("fts_vector_hybrid")
+        .add_field(FieldSchema::new("id", DataType::String, false, 0).unwrap())
+        .add_vector_field(
+            "embedding",
+            DataType::VectorFp32,
+            4,
+            IndexParams::hnsw(MetricType::Cosine, 16, 200).unwrap(),
+        )
+        .add_indexed_field(
+            "content",
+            DataType::String,
+            IndexParams::fts(None, None, None).unwrap(),
+        )
+        .build()
+        .expect("failed to build schema");
+
+    let collection = Collection::create_and_open(dir.to_str().unwrap(), &schema, None)
+        .expect("failed to create collection");
+
+    // Insert docs with both vector and text
+    let texts = [
+        "machine learning is powerful",
+        "deep learning uses neural networks",
+        "vector databases store embeddings",
+        "Rust is a systems language",
+    ];
+    let mut docs = Vec::new();
+    for (i, text) in texts.iter().enumerate() {
+        let mut doc = Doc::new().unwrap();
+        let pk = format!("pk_{}", i);
+        doc.set_pk(&pk);
+        doc.add_string("id", &pk).unwrap();
+        doc.add_string("content", text).unwrap();
+        let vector = [
+            (i as f32 + 1.0) * 0.1,
+            (i as f32 + 2.0) * 0.1,
+            (i as f32 + 3.0) * 0.1,
+            (i as f32 + 4.0) * 0.1,
+        ];
+        doc.add_vector_f32("embedding", &vector).unwrap();
+        docs.push(doc);
+    }
+    let doc_refs: Vec<&Doc> = docs.iter().collect();
+    collection.insert(&doc_refs).unwrap();
+    collection.flush().unwrap();
+
+    // Vector sub-query: search for similar embeddings
+    let mut sub_vec = SubQuery::new().unwrap();
+    sub_vec.set_field_name("embedding").unwrap();
+    sub_vec.set_query_vector(&[0.2, 0.3, 0.4, 0.5]).unwrap();
+    sub_vec.set_num_candidates(20).unwrap();
+
+    // FTS sub-query: search for "learning"
+    let mut fts = Fts::new().unwrap();
+    fts.set_match_string("learning").unwrap();
+    let mut sub_fts = SubQuery::new().unwrap();
+    sub_fts.set_field_name("content").unwrap();
+    sub_fts.set_fts(&fts).unwrap();
+    sub_fts.set_num_candidates(20).unwrap();
+
+    // Multi-query with RRF reranking
+    let mut mq = MultiQuery::new().unwrap();
+    mq.set_topk(10).unwrap();
+    mq.set_rerank_rrf(60).unwrap();
+    mq.add_sub_query(&sub_vec).unwrap();
+    mq.add_sub_query(&sub_fts).unwrap();
+
+    let results = collection.multi_query(&mq).unwrap();
+    assert!(!results.is_empty(), "hybrid query should return results");
+
+    // The FTS should match "machine learning" and "deep learning" docs
+    // Vector search should also contribute results
+    let pks: Vec<String> = results
+        .iter()
+        .map(|d| d.get_string("id").unwrap().unwrap())
+        .collect();
+
+    // At least some docs with "learning" should be in results
+    assert!(
+        pks.contains(&"pk_0".to_string()) || pks.contains(&"pk_1".to_string()),
+        "expected at least one 'learning' doc in results, got: {:?}",
+        pks
+    );
+}

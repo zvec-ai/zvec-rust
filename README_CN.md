@@ -256,6 +256,37 @@ let query = SearchQuery::builder()
     .build()?;
 ```
 
+### 多路检索（混合搜索）
+
+`MultiQuery` 可以组合多个子查询（稠密向量、稀疏向量或全文检索），并使用 RRF 或加权策略重排：
+
+```rust
+// FTS + 向量混合检索，使用 RRF 重排
+let mut sub_vec = SubQuery::new()?;
+sub_vec.set_field_name("embedding")?;
+sub_vec.set_query_vector(&query_vec)?;
+sub_vec.set_num_candidates(50)?;
+
+let mut fts = Fts::new()?;
+fts.set_match_string("Rust 向量数据库")?;
+
+let mut sub_fts = SubQuery::new()?;
+sub_fts.set_field_name("content")?;
+sub_fts.set_fts(&fts)?;
+sub_fts.set_num_candidates(50)?;
+
+let mut mq = MultiQuery::new()?;
+mq.set_topk(10)?;
+mq.set_rerank_rrf(60)?;   // RRF 的 rank constant
+mq.add_sub_query(&sub_vec)?;
+mq.add_sub_query(&sub_fts)?;
+
+let results = collection.multi_query(&mq)?;
+
+// 加权重排
+mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
+```
+
 ## 支持的类型
 
 | 类别 | 类型 |

@@ -6,7 +6,8 @@
 use std::os::raw::c_void;
 
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
-use crate::query::{FlatQueryParams, HnswQueryParams, IvfQueryParams};
+use crate::query::{FlatQueryParams, FtsQueryParams, HnswQueryParams, IvfQueryParams};
+use crate::query::Fts;
 
 /// A multi-query operation combining multiple [`SubQuery`] objects.
 ///
@@ -273,6 +274,20 @@ impl SubQuery {
         params.handle = std::ptr::null_mut();
         Ok(())
     }
+
+    /// Sets FTS query parameters (takes ownership on success).
+    pub fn set_fts_params(&mut self, mut params: FtsQueryParams) -> Result<()> {
+        check_error(unsafe {
+            zvec_rust_sys::zvec_sub_query_set_fts_params(self.handle, params.handle)
+        })?;
+        params.handle = std::ptr::null_mut();
+        Ok(())
+    }
+
+    /// Sets FTS payload (payload is copied, caller retains ownership).
+    pub fn set_fts(&mut self, fts: &Fts) -> Result<()> {
+        check_error(unsafe { zvec_rust_sys::zvec_sub_query_set_fts(self.handle, fts.handle) })
+    }
 }
 
 impl Drop for SubQuery {
@@ -327,5 +342,25 @@ mod tests {
         let mut mq = MultiQuery::new().expect("create multi-query");
         let err = mq.set_rerank_weighted(&[]).unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidArgument);
+    }
+
+    #[test]
+    fn sub_query_set_fts() {
+        let mut sub = SubQuery::new().expect("create sub-query");
+        sub.set_field_name("content").expect("set field name");
+
+        let mut fts = Fts::new().expect("create fts payload");
+        fts.set_match_string("hello world").expect("set match string");
+
+        sub.set_fts(&fts).expect("set fts payload");
+    }
+
+    #[test]
+    fn sub_query_set_fts_params() {
+        let mut sub = SubQuery::new().expect("create sub-query");
+        sub.set_field_name("content").expect("set field name");
+
+        let params = FtsQueryParams::new(Some("AND")).expect("create fts params");
+        sub.set_fts_params(params).expect("set fts params");
     }
 }

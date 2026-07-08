@@ -256,6 +256,37 @@ let query = SearchQuery::builder()
     .build()?;
 ```
 
+### Multi-Query (Hybrid Search)
+
+`MultiQuery` combines multiple sub-queries (dense vector, sparse vector, or FTS) with RRF or weighted reranking:
+
+```rust
+// FTS + vector hybrid search with RRF reranking
+let mut sub_vec = SubQuery::new()?;
+sub_vec.set_field_name("embedding")?;
+sub_vec.set_query_vector(&query_vec)?;
+sub_vec.set_num_candidates(50)?;
+
+let mut fts = Fts::new()?;
+fts.set_match_string("Rust vector database")?;
+
+let mut sub_fts = SubQuery::new()?;
+sub_fts.set_field_name("content")?;
+sub_fts.set_fts(&fts)?;
+sub_fts.set_num_candidates(50)?;
+
+let mut mq = MultiQuery::new()?;
+mq.set_topk(10)?;
+mq.set_rerank_rrf(60)?;   // rank constant for RRF
+mq.add_sub_query(&sub_vec)?;
+mq.add_sub_query(&sub_fts)?;
+
+let results = collection.multi_query(&mq)?;
+
+// Weighted reranking
+mq.set_rerank_weighted(&[0.7, 0.3])?;  // weights per sub-query
+```
+
 ## Supported Types
 
 | Category | Types |

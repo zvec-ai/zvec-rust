@@ -1365,6 +1365,14 @@ extern "C" {
         query: *mut zvec_sub_query_t,
         flat_params: *mut zvec_flat_query_params_t,
     ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_fts_params(
+        query: *mut zvec_sub_query_t,
+        fts_params: *mut zvec_fts_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_fts(
+        query: *mut zvec_sub_query_t,
+        fts: *const zvec_fts_t,
+    ) -> zvec_error_code_t;
 
     // -------------------------------------------------------------------------
     // Document Operations
