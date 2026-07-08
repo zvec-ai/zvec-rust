@@ -9,7 +9,7 @@
 //! running. Run with: `cargo test --test string_filter_test`
 
 use std::sync::Once;
-use zvec::*;
+use zvec_rust::*;
 
 static INIT: Once = Once::new();
 
