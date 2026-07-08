@@ -46,8 +46,13 @@ jobs:
             os: windows-latest
             lib_name: zvec_c_api.dll
     runs-on: ${{ matrix.os }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v5
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - uses: actions/setup-python@v5
         if: runner.os != 'Windows'
@@ -101,15 +106,6 @@ jobs:
             --config-settings='cmake.define.BUILD_TOOLS="ON"'
         shell: bash
 
-      - name: Patch lz4 CMake for non-sccache Windows builds
-        if: runner.os == 'Windows'
-        run: |
-          cd ../zvec
-          sed -i '/-DCMAKE_C_COMPILER_LAUNCHER=\${CMAKE_C_COMPILER_LAUNCHER}/d' thirdparty/lz4/CMakeLists.txt
-          sed -i '/-DCMAKE_POLICY_DEFAULT_CMP0141=NEW/d' thirdparty/lz4/CMakeLists.txt
-          sed -i '/-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded/d' thirdparty/lz4/CMakeLists.txt
-        shell: bash
-
       - name: Build zvec C library (Windows)
         if: runner.os == 'Windows'
         env:
@@ -117,7 +113,7 @@ jobs:
         run: |
           cd ../zvec
           mkdir -p build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
           cmake --build . --config Release --parallel
         shell: bash
 
