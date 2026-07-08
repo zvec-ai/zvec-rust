@@ -319,6 +319,10 @@ jobs:
         run: cargo test --workspace --doc
         shell: bash
 
+      - name: Run examples
+        run: cargo run --example basic
+        shell: bash
+
   audit:
     name: Security Audit
     needs: test

@@ -27,6 +27,8 @@
 | **Windows** | x86_64 (MSVC) | ✅ Clippy + 测试 | CMake + MSVC 工具链 |
 
 > 动态库文件名因平台而异：`libzvec_c_api.dylib`（macOS）、`libzvec_c_api.so`（Linux）、`zvec_c_api.dll`（Windows）。
+>
+> **Windows 用户注意：** 预编译的 `zvec_c_api.dll` 使用 `/MD` 编译，需要安装 [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)。如果运行时报 `STATUS_DLL_NOT_FOUND (0xc0000135)`，请安装 Redistributable 后重启终端。
 
 ## 架构
 
