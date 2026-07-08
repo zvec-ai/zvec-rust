@@ -129,6 +129,7 @@ jobs:
         shell: bash
         env:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          MSYS_NO_PATHCONV: 1
 
       - name: Set library path (Unix)
         if: runner.os != 'Windows'
@@ -262,6 +263,7 @@ jobs:
         shell: bash
         env:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          MSYS_NO_PATHCONV: 1
 
       - name: Set library path (Unix)
         if: runner.os != 'Windows'

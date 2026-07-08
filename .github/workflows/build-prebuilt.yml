@@ -103,6 +103,8 @@ jobs:
 
       - name: Build zvec C library (Windows)
         if: runner.os == 'Windows'
+        env:
+          MSYS_NO_PATHCONV: 1
         run: |
           cd ../zvec
           mkdir -p build && cd build
