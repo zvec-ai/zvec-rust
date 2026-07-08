@@ -1,6 +1,7 @@
 # zvec-rust
 
 [![CI](https://github.com/zvec-ai/zvec-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/zvec-ai/zvec-rust/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/zvec-rust.svg)](https://crates.io/crates/zvec-rust)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 [English](README.md) | 中文
@@ -46,11 +47,11 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ### 方案一： bundled 预编译库（零配置）
 
-启用 `bundled` feature 后，`build.rs` 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`，并通过 `rpath` 设置库路径：
+在 `Cargo.toml` 中添加 `zvec-rust`。默认启用的 `bundled` feature 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`，并通过 `rpath` 设置库路径：
 
 ```toml
 [dependencies]
-zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.1", features = ["bundled"] }
+zvec-rust = "0.5.1"
 ```
 
 ### 方案二：自行编译

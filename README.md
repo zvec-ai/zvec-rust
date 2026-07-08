@@ -1,6 +1,7 @@
 # zvec-rust
 
 [![CI](https://github.com/zvec-ai/zvec-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/zvec-ai/zvec-rust/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/zvec-rust.svg)](https://crates.io/crates/zvec-rust)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 English | [中文](README_CN.md)
@@ -46,11 +47,11 @@ The Rust SDK depends on the zvec C library (`libzvec_c_api`). Choose one of the 
 
 ### Option 1: Bundled Prebuilt Library (Zero Setup)
 
-Enable the `bundled` feature and `build.rs` will automatically download the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and set up the library path via `rpath`:
+Add `zvec-rust` to your `Cargo.toml`. The default `bundled` feature automatically downloads the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and sets up the library path via `rpath`:
 
 ```toml
 [dependencies]
-zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.1", features = ["bundled"] }
+zvec-rust = "0.5.1"
 ```
 
 ### Option 2: Custom Build
