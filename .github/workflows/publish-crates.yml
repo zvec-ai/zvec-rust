@@ -54,7 +54,9 @@ jobs:
         shell: bash
 
       - name: Publish zvec-rust-sys to crates.io
-        run: cargo publish -p zvec-rust-sys --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p zvec-rust-sys
         shell: bash
 
       - name: Wait for zvec-rust-sys on crates.io
@@ -78,5 +80,43 @@ jobs:
         shell: bash
 
       - name: Publish zvec-rust to crates.io
-        run: cargo publish -p zvec-rust --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p zvec-rust
+        shell: bash
+
+      - name: Wait for zvec-rust on crates.io
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          for i in {1..30}; do
+            if cargo search zvec-rust --limit 1 | grep -q "zvec-rust.*=.*\"$VERSION\""; then
+              echo "zvec-rust $VERSION found on crates.io"
+              exit 0
+            fi
+            echo "Waiting for zvec-rust $VERSION to appear on crates.io... ($i/30)"
+            sleep 10
+          done
+          echo "Timeout waiting for zvec-rust $VERSION on crates.io"
+          exit 1
+        shell: bash
+
+      - name: Verify published crate is usable
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          TMP_DIR=$(mktemp -d)
+          cd "$TMP_DIR"
+          cargo init --name zvec_publish_verify
+          cargo add zvec-rust@"$VERSION"
+          cat > src/main.rs <<'EOF'
+          fn main() -> zvec_rust::Result<()> {
+              zvec_rust::initialize(None)?;
+              assert!(!zvec_rust::version().is_empty());
+              zvec_rust::shutdown();
+              Ok(())
+          }
+          EOF
+          cargo check
+          echo "Verified zvec-rust $VERSION can be consumed from crates.io"
         shell: bash
