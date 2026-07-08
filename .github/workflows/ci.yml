@@ -123,6 +123,9 @@ jobs:
         run: |
           git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
+          sed -i '/-DCMAKE_C_COMPILER_LAUNCHER=\${CMAKE_C_COMPILER_LAUNCHER}/d' thirdparty/lz4/CMakeLists.txt
+          sed -i '/-DCMAKE_POLICY_DEFAULT_CMP0141=NEW/d' thirdparty/lz4/CMakeLists.txt
+          sed -i '/-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded/d' thirdparty/lz4/CMakeLists.txt
           mkdir -p build && cd build
           cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
           cmake --build . --config Release --parallel
@@ -257,6 +260,9 @@ jobs:
         run: |
           git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
           cd ../zvec
+          sed -i '/-DCMAKE_C_COMPILER_LAUNCHER=\${CMAKE_C_COMPILER_LAUNCHER}/d' thirdparty/lz4/CMakeLists.txt
+          sed -i '/-DCMAKE_POLICY_DEFAULT_CMP0141=NEW/d' thirdparty/lz4/CMakeLists.txt
+          sed -i '/-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded/d' thirdparty/lz4/CMakeLists.txt
           mkdir -p build && cd build
           cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
           cmake --build . --config Release --parallel
