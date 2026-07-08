@@ -89,8 +89,8 @@ To maintain security when using zvec-rust:
 
 This security policy covers:
 
-- The `zvec` crate (safe Rust wrapper)
-- The `zvec-sys` crate (FFI bindings)
+- The `zvec-rust` crate (safe Rust wrapper)
+- The `zvec-rust-sys` crate (FFI bindings)
 - Build scripts and configuration
 - Official examples and documentation
 

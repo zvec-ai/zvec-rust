@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use std::sync::Once;
-use zvec::Doc;
+use zvec_rust::Doc;
 
 static INIT: Once = Once::new();
 
@@ -23,7 +23,7 @@ struct FuzzInput {
 
 fuzz_target!(|input: FuzzInput| {
     INIT.call_once(|| {
-        zvec::initialize(None).expect("Failed to initialize zvec");
+        zvec_rust::initialize(None).expect("Failed to initialize zvec");
     });
 
     let FuzzInput {

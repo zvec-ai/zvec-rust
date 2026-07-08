@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use std::sync::Once;
-use zvec::{DataType, FieldSchema, IndexParams, MetricType};
+use zvec_rust::{DataType, FieldSchema, IndexParams, MetricType};
 
 static INIT: Once = Once::new();
 
@@ -23,7 +23,7 @@ struct FuzzInput {
 
 fuzz_target!(|input: FuzzInput| {
     INIT.call_once(|| {
-        zvec::initialize(None).expect("Failed to initialize zvec");
+        zvec_rust::initialize(None).expect("Failed to initialize zvec");
     });
 
     let FuzzInput {
@@ -49,7 +49,7 @@ fuzz_target!(|input: FuzzInput| {
     let _ = FieldSchema::new(&field_name, DataType::VectorFp32, false, dimension);
 
     let _ = IndexParams::hnsw(metric, m, ef_construction);
-    let _ = IndexParams::hnsw_with_quantize(metric, m, ef_construction, zvec::QuantizeType::Int8);
+    let _ = IndexParams::hnsw_with_quantize(metric, m, ef_construction, zvec_rust::QuantizeType::Int8);
     let _ = IndexParams::ivf(metric, n_list, n_iters, use_soar);
     let _ = IndexParams::flat(metric);
     let _ = IndexParams::invert(enable_range_opt, enable_wildcard);
@@ -59,7 +59,7 @@ fuzz_target!(|input: FuzzInput| {
         FieldSchema::new("default_field", DataType::String, false, 0),
         IndexParams::hnsw(metric, m, ef_construction),
     ) {
-        let _ = zvec::CollectionSchema::builder(&collection_name)
+        let _ = zvec_rust::CollectionSchema::builder(&collection_name)
             .add_field(field)
             .add_vector_field(
                 &format!("{}_vec", field_name.replace('\0', "_")),

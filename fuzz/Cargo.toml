@@ -9,8 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-zvec = { path = "../zvec" }
-zvec-sys = { path = "../zvec-sys" }
+zvec-rust = { path = "../zvec" }
+zvec-rust-sys = { path = "../zvec-sys" }
 arbitrary = { version = "1", features = ["derive"] }
 tempfile = "3"
 

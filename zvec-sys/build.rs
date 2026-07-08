@@ -105,21 +105,21 @@ fn resolve_lib_dir(
     }
 
     // 5. Download prebuilt dynamic library from GitHub Release
-    if env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
+    if cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
         if let Some(dir) = download_prebuilt(prebuilt_cache_dir) {
             return Some(dir);
         }
     }
 
     // 6. Auto-build from source (fallback)
-    if env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
+    if cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
         if let Some(dir) = auto_build_zvec(auto_build_dir) {
             return Some(dir);
         }
     }
 
     println!(
-        "cargo:warning=Could not find libzvec_c_api. Set ZVEC_LIB_DIR or place a sibling zvec/ checkout."
+        "cargo:warning=Could not find libzvec_c_api. Set ZVEC_LIB_DIR, place a sibling zvec/ checkout, pre-build vendor/lib, or enable the bundled feature."
     );
     None
 }

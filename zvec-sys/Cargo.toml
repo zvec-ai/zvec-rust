@@ -1,5 +1,5 @@
 [package]
-name = "zvec-sys"
+name = "zvec-rust-sys"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,5 +10,12 @@ readme = "README.md"
 links = "zvec_c_api"
 keywords = ["ffi", "vector-database", "zvec", "bindings"]
 categories = ["external-ffi-bindings", "database"]
+
+[features]
+default = []
+bundled = []
+
+[package.metadata.docs.rs]
+features = ["bundled"]
 
 [build-dependencies]

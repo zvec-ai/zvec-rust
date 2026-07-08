@@ -8,7 +8,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::Rng;
 use std::sync::Once;
-use zvec::*;
+use zvec_rust::*;
 
 static INIT: Once = Once::new();
 

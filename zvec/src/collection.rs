@@ -9,13 +9,13 @@ use crate::schema::{CollectionSchema, FieldSchema, IndexParams};
 
 /// Options for creating or opening a collection.
 pub struct CollectionOptions {
-    pub(crate) handle: *mut zvec_sys::zvec_collection_options_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_collection_options_t,
 }
 
 impl CollectionOptions {
     /// Creates new collection options with default values.
     pub fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_collection_options_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_collection_options_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -28,44 +28,44 @@ impl CollectionOptions {
     /// Sets whether to enable memory mapping.
     pub fn set_enable_mmap(&mut self, enable: bool) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_collection_options_set_enable_mmap(self.handle, enable)
+            zvec_rust_sys::zvec_collection_options_set_enable_mmap(self.handle, enable)
         })
     }
 
     /// Returns whether memory mapping is enabled.
     pub fn enable_mmap(&self) -> bool {
-        unsafe { zvec_sys::zvec_collection_options_get_enable_mmap(self.handle) }
+        unsafe { zvec_rust_sys::zvec_collection_options_get_enable_mmap(self.handle) }
     }
 
     /// Sets the maximum buffer size in bytes.
     pub fn set_max_buffer_size(&mut self, size: u64) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_collection_options_set_max_buffer_size(self.handle, size as usize)
+            zvec_rust_sys::zvec_collection_options_set_max_buffer_size(self.handle, size as usize)
         })
     }
 
     /// Returns the maximum buffer size in bytes.
     pub fn max_buffer_size(&self) -> u64 {
-        unsafe { zvec_sys::zvec_collection_options_get_max_buffer_size(self.handle) as u64 }
+        unsafe { zvec_rust_sys::zvec_collection_options_get_max_buffer_size(self.handle) as u64 }
     }
 
     /// Sets whether the collection is read-only.
     pub fn set_read_only(&mut self, read_only: bool) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_collection_options_set_read_only(self.handle, read_only)
+            zvec_rust_sys::zvec_collection_options_set_read_only(self.handle, read_only)
         })
     }
 
     /// Returns whether the collection is read-only.
     pub fn read_only(&self) -> bool {
-        unsafe { zvec_sys::zvec_collection_options_get_read_only(self.handle) }
+        unsafe { zvec_rust_sys::zvec_collection_options_get_read_only(self.handle) }
     }
 }
 
 impl Drop for CollectionOptions {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_collection_options_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_collection_options_destroy(self.handle) };
         }
     }
 }
@@ -114,7 +114,7 @@ pub struct WriteResult {
 ///
 /// The collection is automatically closed when dropped.
 pub struct Collection {
-    handle: *mut zvec_sys::zvec_collection_t,
+    handle: *mut zvec_rust_sys::zvec_collection_t,
 }
 
 impl Collection {
@@ -122,7 +122,7 @@ impl Collection {
     ///
     /// # Safety
     /// The caller must not use the handle after the `Collection` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_collection_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_collection_t {
         self.handle
     }
 
@@ -131,7 +131,7 @@ impl Collection {
     /// # Safety
     /// The caller must ensure the handle is valid and was created by the zvec C API.
     /// The `Collection` takes ownership and will call `zvec_collection_close` on drop.
-    pub unsafe fn from_raw(handle: *mut zvec_sys::zvec_collection_t) -> Self {
+    pub unsafe fn from_raw(handle: *mut zvec_rust_sys::zvec_collection_t) -> Self {
         Collection { handle }
     }
 
@@ -144,9 +144,9 @@ impl Collection {
         let c_path = to_cstring(path)?;
         let c_options = options.map(|o| o.handle as *const _).unwrap_or(ptr::null());
 
-        let mut handle: *mut zvec_sys::zvec_collection_t = ptr::null_mut();
+        let mut handle: *mut zvec_rust_sys::zvec_collection_t = ptr::null_mut();
         check_error(unsafe {
-            zvec_sys::zvec_collection_create_and_open(
+            zvec_rust_sys::zvec_collection_create_and_open(
                 c_path.as_ptr(),
                 schema.handle,
                 c_options,
@@ -162,9 +162,9 @@ impl Collection {
         let c_path = to_cstring(path)?;
         let c_options = options.map(|o| o.handle as *const _).unwrap_or(ptr::null());
 
-        let mut handle: *mut zvec_sys::zvec_collection_t = ptr::null_mut();
+        let mut handle: *mut zvec_rust_sys::zvec_collection_t = ptr::null_mut();
         check_error(unsafe {
-            zvec_sys::zvec_collection_open(c_path.as_ptr(), c_options, &mut handle)
+            zvec_rust_sys::zvec_collection_open(c_path.as_ptr(), c_options, &mut handle)
         })?;
 
         Ok(Collection { handle })
@@ -172,45 +172,47 @@ impl Collection {
 
     /// Flushes collection data to disk.
     pub fn flush(&self) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_collection_flush(self.handle) })
+        check_error(unsafe { zvec_rust_sys::zvec_collection_flush(self.handle) })
     }
 
     /// Returns the collection schema.
     pub fn schema(&self) -> Result<CollectionSchema> {
-        let mut schema_handle: *mut zvec_sys::zvec_collection_schema_t = ptr::null_mut();
+        let mut schema_handle: *mut zvec_rust_sys::zvec_collection_schema_t = ptr::null_mut();
         check_error(unsafe {
-            zvec_sys::zvec_collection_get_schema(self.handle, &mut schema_handle)
+            zvec_rust_sys::zvec_collection_get_schema(self.handle, &mut schema_handle)
         })?;
         Ok(CollectionSchema::from_owned(schema_handle))
     }
 
     /// Returns collection statistics.
     pub fn stats(&self) -> Result<CollectionStats> {
-        let mut stats_handle: *mut zvec_sys::zvec_collection_stats_t = ptr::null_mut();
+        let mut stats_handle: *mut zvec_rust_sys::zvec_collection_stats_t = ptr::null_mut();
         check_error(unsafe {
-            zvec_sys::zvec_collection_get_stats(self.handle, &mut stats_handle)
+            zvec_rust_sys::zvec_collection_get_stats(self.handle, &mut stats_handle)
         })?;
 
-        let doc_count = unsafe { zvec_sys::zvec_collection_stats_get_doc_count(stats_handle) };
-        let index_count = unsafe { zvec_sys::zvec_collection_stats_get_index_count(stats_handle) };
+        let doc_count = unsafe { zvec_rust_sys::zvec_collection_stats_get_doc_count(stats_handle) };
+        let index_count =
+            unsafe { zvec_rust_sys::zvec_collection_stats_get_index_count(stats_handle) };
 
         let mut indexes = Vec::with_capacity(index_count);
 
         for i in 0..index_count {
             let name_ptr =
-                unsafe { zvec_sys::zvec_collection_stats_get_index_name(stats_handle, i) };
+                unsafe { zvec_rust_sys::zvec_collection_stats_get_index_name(stats_handle, i) };
             let name = if name_ptr.is_null() {
                 String::new()
             } else {
                 unsafe { CStr::from_ptr(name_ptr).to_string_lossy().into_owned() }
             };
 
-            let completeness =
-                unsafe { zvec_sys::zvec_collection_stats_get_index_completeness(stats_handle, i) };
+            let completeness = unsafe {
+                zvec_rust_sys::zvec_collection_stats_get_index_completeness(stats_handle, i)
+            };
             indexes.push(IndexStat { name, completeness });
         }
 
-        unsafe { zvec_sys::zvec_collection_stats_destroy(stats_handle) };
+        unsafe { zvec_rust_sys::zvec_collection_stats_destroy(stats_handle) };
 
         Ok(CollectionStats { doc_count, indexes })
     }
@@ -221,13 +223,13 @@ impl Collection {
 
     /// Inserts documents into the collection.
     pub fn insert(&self, docs: &[&Doc]) -> Result<WriteResult> {
-        let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
+        let ptrs: Vec<*const zvec_rust_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut results: *mut zvec_rust_sys::zvec_write_result_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_insert_with_results(
+            zvec_rust_sys::zvec_collection_insert_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
@@ -241,13 +243,13 @@ impl Collection {
 
     /// Updates documents in the collection.
     pub fn update(&self, docs: &[&Doc]) -> Result<WriteResult> {
-        let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
+        let ptrs: Vec<*const zvec_rust_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut results: *mut zvec_rust_sys::zvec_write_result_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_update_with_results(
+            zvec_rust_sys::zvec_collection_update_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
@@ -261,13 +263,13 @@ impl Collection {
 
     /// Inserts or updates documents (upsert).
     pub fn upsert(&self, docs: &[&Doc]) -> Result<WriteResult> {
-        let ptrs: Vec<*const zvec_sys::zvec_doc_t> =
+        let ptrs: Vec<*const zvec_rust_sys::zvec_doc_t> =
             docs.iter().map(|d| d.handle as *const _).collect();
-        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut results: *mut zvec_rust_sys::zvec_write_result_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_upsert_with_results(
+            zvec_rust_sys::zvec_collection_upsert_with_results(
                 self.handle,
                 ptrs.as_ptr(),
                 ptrs.len(),
@@ -286,11 +288,11 @@ impl Collection {
             .map(|pk| to_cstring(pk))
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_pks.iter().map(|pk| pk.as_ptr()).collect();
-        let mut results: *mut zvec_sys::zvec_write_result_t = ptr::null_mut();
+        let mut results: *mut zvec_rust_sys::zvec_write_result_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_delete_with_results(
+            zvec_rust_sys::zvec_collection_delete_with_results(
                 self.handle,
                 c_ptrs.as_ptr(),
                 c_ptrs.len(),
@@ -306,7 +308,7 @@ impl Collection {
     pub fn delete_by_filter(&self, filter: &str) -> Result<()> {
         let c_filter = to_cstring(filter)?;
         check_error(unsafe {
-            zvec_sys::zvec_collection_delete_by_filter(self.handle, c_filter.as_ptr())
+            zvec_rust_sys::zvec_collection_delete_by_filter(self.handle, c_filter.as_ptr())
         })
     }
 
@@ -316,11 +318,11 @@ impl Collection {
 
     /// Performs a vector similarity search.
     pub fn query(&self, query: &SearchQuery) -> Result<Vec<Doc>> {
-        let mut results: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
+        let mut results: *mut *mut zvec_rust_sys::zvec_doc_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_query(
+            zvec_rust_sys::zvec_collection_query(
                 self.handle,
                 query.handle,
                 &mut results,
@@ -335,11 +337,11 @@ impl Collection {
     /// Performs a multi-query that combines several sub-queries with a rerank
     /// strategy (RRF or weighted).
     pub fn multi_query(&self, query: &MultiQuery) -> Result<Vec<Doc>> {
-        let mut results: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
+        let mut results: *mut *mut zvec_rust_sys::zvec_doc_t = ptr::null_mut();
         let mut result_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_multi_query(
+            zvec_rust_sys::zvec_collection_multi_query(
                 self.handle,
                 query.handle,
                 &mut results,
@@ -385,11 +387,11 @@ impl Collection {
             None => (ptr::null(), 0),
         };
 
-        let mut documents: *mut *mut zvec_sys::zvec_doc_t = ptr::null_mut();
+        let mut documents: *mut *mut zvec_rust_sys::zvec_doc_t = ptr::null_mut();
         let mut found_count: usize = 0;
 
         check_error(unsafe {
-            zvec_sys::zvec_collection_fetch(
+            zvec_rust_sys::zvec_collection_fetch(
                 self.handle,
                 c_pk_ptrs.as_ptr(),
                 c_pk_ptrs.len(),
@@ -413,19 +415,21 @@ impl Collection {
     pub fn create_index(&self, field_name: &str, params: &IndexParams) -> Result<()> {
         let c_name = to_cstring(field_name)?;
         check_error(unsafe {
-            zvec_sys::zvec_collection_create_index(self.handle, c_name.as_ptr(), params.handle)
+            zvec_rust_sys::zvec_collection_create_index(self.handle, c_name.as_ptr(), params.handle)
         })
     }
 
     /// Drops an index from a field.
     pub fn drop_index(&self, field_name: &str) -> Result<()> {
         let c_name = to_cstring(field_name)?;
-        check_error(unsafe { zvec_sys::zvec_collection_drop_index(self.handle, c_name.as_ptr()) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_collection_drop_index(self.handle, c_name.as_ptr())
+        })
     }
 
     /// Optimizes the collection (rebuild indexes, merge segments, etc.).
     pub fn optimize(&self) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_collection_optimize(self.handle) })
+        check_error(unsafe { zvec_rust_sys::zvec_collection_optimize(self.handle) })
     }
 
     // =========================================================================
@@ -440,14 +444,16 @@ impl Collection {
             .map(|s| s.as_ptr())
             .unwrap_or(ptr::null());
         check_error(unsafe {
-            zvec_sys::zvec_collection_add_column(self.handle, field_schema.handle, c_expr_ptr)
+            zvec_rust_sys::zvec_collection_add_column(self.handle, field_schema.handle, c_expr_ptr)
         })
     }
 
     /// Drops a column from the collection.
     pub fn drop_column(&self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
-        check_error(unsafe { zvec_sys::zvec_collection_drop_column(self.handle, c_name.as_ptr()) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_collection_drop_column(self.handle, c_name.as_ptr())
+        })
     }
 
     /// Closes the collection explicitly.
@@ -462,8 +468,8 @@ impl Drop for Collection {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             // Safety: handle was created by zvec_collection_create_and_open or zvec_collection_open
-            let rc = unsafe { zvec_sys::zvec_collection_close(self.handle) };
-            if rc != zvec_sys::ZVEC_OK {
+            let rc = unsafe { zvec_rust_sys::zvec_collection_close(self.handle) };
+            if rc != zvec_rust_sys::ZVEC_OK {
                 eprintln!(
                     "zvec warning: failed to close collection (error code {})",
                     rc
@@ -480,7 +486,10 @@ unsafe impl Send for Collection {}
 unsafe impl Sync for Collection {}
 
 /// Parses a C array of `zvec_write_result_t` into a `WriteResult`.
-fn collect_write_results(results: *mut zvec_sys::zvec_write_result_t, count: usize) -> WriteResult {
+fn collect_write_results(
+    results: *mut zvec_rust_sys::zvec_write_result_t,
+    count: usize,
+) -> WriteResult {
     let mut doc_results = Vec::with_capacity(count);
     let mut success_count: u64 = 0;
     let mut error_count: u64 = 0;
@@ -488,7 +497,7 @@ fn collect_write_results(results: *mut zvec_sys::zvec_write_result_t, count: usi
     if !results.is_null() && count > 0 {
         for i in 0..count {
             let wr = unsafe { &*results.add(i) };
-            let is_ok = wr.code == zvec_sys::ZVEC_OK;
+            let is_ok = wr.code == zvec_rust_sys::ZVEC_OK;
             let message = if wr.message.is_null() {
                 String::new()
             } else {
@@ -505,7 +514,7 @@ fn collect_write_results(results: *mut zvec_sys::zvec_write_result_t, count: usi
                 message,
             });
         }
-        unsafe { zvec_sys::zvec_write_results_free(results, count) };
+        unsafe { zvec_rust_sys::zvec_write_results_free(results, count) };
     }
 
     WriteResult {
@@ -520,7 +529,7 @@ fn collect_write_results(results: *mut zvec_sys::zvec_write_result_t, count: usi
 /// # Safety
 /// `results` must point to a valid array of `count` document pointers
 /// allocated by the zvec C library.
-unsafe fn collect_docs(results: *mut *mut zvec_sys::zvec_doc_t, count: usize) -> Vec<Doc> {
+unsafe fn collect_docs(results: *mut *mut zvec_rust_sys::zvec_doc_t, count: usize) -> Vec<Doc> {
     if results.is_null() || count == 0 {
         return Vec::new();
     }
@@ -536,7 +545,7 @@ unsafe fn collect_docs(results: *mut *mut zvec_sys::zvec_doc_t, count: usize) ->
 
     // Free only the pointer array itself (not the individual docs, which are now
     // owned by the Doc wrappers above and will be freed via their Drop impls).
-    zvec_sys::zvec_free(results as *mut std::os::raw::c_void);
+    zvec_rust_sys::zvec_free(results as *mut std::os::raw::c_void);
 
     docs
 }
@@ -554,7 +563,7 @@ mod tests {
     #[test]
     fn collect_docs_handles_zero_count() {
         // Even with a non-null pointer, zero count should return empty
-        let mut fake: *mut zvec_sys::zvec_doc_t = ptr::null_mut();
+        let mut fake: *mut zvec_rust_sys::zvec_doc_t = ptr::null_mut();
         let docs = unsafe { collect_docs(&mut fake as *mut _, 0) };
         assert!(docs.is_empty());
     }

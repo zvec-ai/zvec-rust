@@ -14,13 +14,13 @@ use crate::query::{FlatQueryParams, HnswQueryParams, IvfQueryParams};
 /// attach individual sub-queries. Configure top-k, filters, and rerank strategy
 /// before passing to [`crate::Collection::multi_query`].
 pub struct MultiQuery {
-    pub(crate) handle: *mut zvec_sys::zvec_multi_query_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_multi_query_t,
 }
 
 impl MultiQuery {
     /// Creates a new multi-query.
     pub fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_multi_query_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_multi_query_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -34,7 +34,7 @@ impl MultiQuery {
     ///
     /// # Safety
     /// The caller must not use the handle after the `MultiQuery` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_multi_query_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_multi_query_t {
         self.handle
     }
 
@@ -42,40 +42,44 @@ impl MultiQuery {
     ///
     /// The sub-query is copied internally; the caller retains ownership.
     pub fn add_sub_query(&mut self, sub: &SubQuery) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_multi_query_add_sub_query(self.handle, sub.handle) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_multi_query_add_sub_query(self.handle, sub.handle)
+        })
     }
 
     /// Returns the number of sub-queries currently registered.
     pub fn sub_query_count(&self) -> usize {
-        unsafe { zvec_sys::zvec_multi_query_get_sub_query_count(self.handle) }
+        unsafe { zvec_rust_sys::zvec_multi_query_get_sub_query_count(self.handle) }
     }
 
     /// Sets the top-k parameter for the merged result.
     pub fn set_topk(&mut self, topk: i32) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_multi_query_set_topk(self.handle, topk) })
+        check_error(unsafe { zvec_rust_sys::zvec_multi_query_set_topk(self.handle, topk) })
     }
 
     /// Returns the configured top-k value.
     pub fn topk(&self) -> i32 {
-        unsafe { zvec_sys::zvec_multi_query_get_topk(self.handle) }
+        unsafe { zvec_rust_sys::zvec_multi_query_get_topk(self.handle) }
     }
 
     /// Sets the filter expression applied to the final merged result.
     pub fn set_filter(&mut self, filter: &str) -> Result<()> {
         let c_filter = to_cstring(filter)?;
         check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_filter(self.handle, c_filter.as_ptr())
+            zvec_rust_sys::zvec_multi_query_set_filter(self.handle, c_filter.as_ptr())
         })
     }
 
     /// Sets whether vector data is returned in the result documents.
     pub fn set_include_vector(&mut self, include: bool) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_multi_query_set_include_vector(self.handle, include) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_multi_query_set_include_vector(self.handle, include)
+        })
     }
 
     /// Returns whether vector data is included in the result documents.
     pub fn include_vector(&self) -> bool {
-        unsafe { zvec_sys::zvec_multi_query_get_include_vector(self.handle) }
+        unsafe { zvec_rust_sys::zvec_multi_query_get_include_vector(self.handle) }
     }
 
     /// Sets the output field whitelist.
@@ -89,14 +93,18 @@ impl MultiQuery {
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_fields.iter().map(|s| s.as_ptr()).collect();
         check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_output_fields(self.handle, c_ptrs.as_ptr(), c_ptrs.len())
+            zvec_rust_sys::zvec_multi_query_set_output_fields(
+                self.handle,
+                c_ptrs.as_ptr(),
+                c_ptrs.len(),
+            )
         })
     }
 
     /// Configures Reciprocal Rank Fusion (RRF) as the rerank strategy.
     pub fn set_rerank_rrf(&mut self, rank_constant: i32) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_rerank_rrf(self.handle, rank_constant)
+            zvec_rust_sys::zvec_multi_query_set_rerank_rrf(self.handle, rank_constant)
         })
     }
 
@@ -109,7 +117,7 @@ impl MultiQuery {
             });
         }
         check_error(unsafe {
-            zvec_sys::zvec_multi_query_set_rerank_weighted(
+            zvec_rust_sys::zvec_multi_query_set_rerank_weighted(
                 self.handle,
                 weights.as_ptr(),
                 weights.len(),
@@ -121,7 +129,7 @@ impl MultiQuery {
 impl Drop for MultiQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_multi_query_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_multi_query_destroy(self.handle) };
         }
     }
 }
@@ -133,13 +141,13 @@ unsafe impl Send for MultiQuery {}
 ///
 /// Each sub-query targets a single vector or sparse-vector field.
 pub struct SubQuery {
-    pub(crate) handle: *mut zvec_sys::zvec_sub_query_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_sub_query_t,
 }
 
 impl SubQuery {
     /// Creates a new sub-query.
     pub fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_sub_query_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_sub_query_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -153,25 +161,25 @@ impl SubQuery {
     ///
     /// # Safety
     /// The caller must not use the handle after the `SubQuery` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_sub_query_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_sub_query_t {
         self.handle
     }
 
     /// Sets the number of candidates to retrieve before reranking.
     pub fn set_num_candidates(&mut self, n: i32) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_sub_query_set_num_candidates(self.handle, n) })
+        check_error(unsafe { zvec_rust_sys::zvec_sub_query_set_num_candidates(self.handle, n) })
     }
 
     /// Returns the number of candidates.
     pub fn num_candidates(&self) -> i32 {
-        unsafe { zvec_sys::zvec_sub_query_get_num_candidates(self.handle) }
+        unsafe { zvec_rust_sys::zvec_sub_query_get_num_candidates(self.handle) }
     }
 
     /// Sets the target field name.
     pub fn set_field_name(&mut self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_field_name(self.handle, c_name.as_ptr())
+            zvec_rust_sys::zvec_sub_query_set_field_name(self.handle, c_name.as_ptr())
         })
     }
 
@@ -185,7 +193,7 @@ impl SubQuery {
         }
         let bytes = std::mem::size_of_val(data);
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_query_vector(
+            zvec_rust_sys::zvec_sub_query_set_query_vector(
                 self.handle,
                 data.as_ptr() as *const c_void,
                 bytes,
@@ -208,7 +216,7 @@ impl SubQuery {
             });
         }
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_sparse_vector(
+            zvec_rust_sys::zvec_sub_query_set_sparse_vector(
                 self.handle,
                 indices.as_ptr(),
                 values.as_ptr(),
@@ -220,7 +228,7 @@ impl SubQuery {
     /// Sets only the sparse-vector indices.
     pub fn set_sparse_indices(&mut self, indices: &[u32]) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_sparse_indices(
+            zvec_rust_sys::zvec_sub_query_set_sparse_indices(
                 self.handle,
                 indices.as_ptr(),
                 indices.len(),
@@ -231,14 +239,18 @@ impl SubQuery {
     /// Sets only the sparse-vector values.
     pub fn set_sparse_values(&mut self, values: &[f32]) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_sparse_values(self.handle, values.as_ptr(), values.len())
+            zvec_rust_sys::zvec_sub_query_set_sparse_values(
+                self.handle,
+                values.as_ptr(),
+                values.len(),
+            )
         })
     }
 
     /// Sets HNSW query parameters (takes ownership on success).
     pub fn set_hnsw_params(&mut self, mut params: HnswQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_hnsw_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_sub_query_set_hnsw_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -247,7 +259,7 @@ impl SubQuery {
     /// Sets IVF query parameters (takes ownership on success).
     pub fn set_ivf_params(&mut self, mut params: IvfQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_ivf_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_sub_query_set_ivf_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -256,7 +268,7 @@ impl SubQuery {
     /// Sets Flat query parameters (takes ownership on success).
     pub fn set_flat_params(&mut self, mut params: FlatQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_sub_query_set_flat_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_sub_query_set_flat_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -266,7 +278,7 @@ impl SubQuery {
 impl Drop for SubQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_sub_query_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_sub_query_destroy(self.handle) };
         }
     }
 }

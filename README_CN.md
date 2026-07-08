@@ -37,27 +37,25 @@ zvec-rust/
 └── fuzz/        # 模糊测试目标
 ```
 
-- **`zvec-sys`** — 原始 `extern "C"` 声明、不透明指针类型和常量
-- **`zvec`** — 安全封装，包含 RAII、Builder、迭代器和地道的 Rust API
+- **`zvec-rust-sys`** — 原始 `extern "C"` 声明、不透明指针类型和常量
+- **`zvec-rust`** — 安全封装，包含 RAII、Builder、迭代器和地道的 Rust API
 
 ## 前置条件
 
-Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。**对于大多数用户，无需手动配置** — 构建脚本会自动从 GitHub Releases 下载预编译库。
+Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提供：
 
-### 普通用户（零配置）
+### 方案一： bundled 预编译库（零配置）
 
-直接添加依赖即可 — 构建脚本会自动处理一切：
+启用 `bundled` feature 后，`build.rs` 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`，并通过 `rpath` 设置库路径：
 
 ```toml
 [dependencies]
-zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0" }
+zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", features = ["bundled"] }
 ```
 
-首次构建时，`build.rs` 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`，并通过 `rpath` 设置库路径。
+### 方案二：自行编译
 
-### 高阶用户（自行编译）
-
-如果你需要自行编译 zvec C 库（例如自定义配置或不支持的平台），设置 `ZVEC_LIB_DIR` 环境变量即可覆盖自动下载：
+如果你需要自行编译 zvec C 库（例如自定义配置或不支持的平台），设置 `ZVEC_LIB_DIR` 环境变量：
 
 ```bash
 # 从源码编译 zvec
@@ -94,9 +92,9 @@ make test-all     # 运行所有测试
 ## 快速开始
 
 ```rust
-use zvec::*;
+use zvec_rust::*;
 
-fn main() -> zvec::Result<()> {
+fn main() -> zvec_rust::Result<()> {
     // 1. 初始化引擎
     initialize(None)?;
 

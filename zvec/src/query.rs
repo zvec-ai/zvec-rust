@@ -4,80 +4,80 @@ use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
 
 /// HNSW-specific query parameters.
 pub struct HnswQueryParams {
-    pub(crate) handle: *mut zvec_sys::zvec_hnsw_query_params_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_hnsw_query_params_t,
 }
 
 impl HnswQueryParams {
     /// Creates new HNSW query parameters.
     pub fn new(ef: i32, radius: f32, is_linear: bool, is_using_refiner: bool) -> Self {
         let handle = unsafe {
-            zvec_sys::zvec_query_params_hnsw_create(ef, radius, is_linear, is_using_refiner)
+            zvec_rust_sys::zvec_query_params_hnsw_create(ef, radius, is_linear, is_using_refiner)
         };
         HnswQueryParams { handle }
     }
 
     /// Sets the exploration factor.
     pub fn set_ef(&mut self, ef: i32) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_query_params_hnsw_set_ef(self.handle, ef) })
+        check_error(unsafe { zvec_rust_sys::zvec_query_params_hnsw_set_ef(self.handle, ef) })
     }
 
     /// Returns the exploration factor.
     pub fn ef(&self) -> i32 {
-        unsafe { zvec_sys::zvec_query_params_hnsw_get_ef(self.handle) }
+        unsafe { zvec_rust_sys::zvec_query_params_hnsw_get_ef(self.handle) }
     }
 }
 
 impl Drop for HnswQueryParams {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_query_params_hnsw_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_query_params_hnsw_destroy(self.handle) };
         }
     }
 }
 
 /// IVF-specific query parameters.
 pub struct IvfQueryParams {
-    pub(crate) handle: *mut zvec_sys::zvec_ivf_query_params_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_ivf_query_params_t,
 }
 
 impl IvfQueryParams {
     /// Creates new IVF query parameters.
     pub fn new(nprobe: i32, is_using_refiner: bool, scale_factor: f32) -> Self {
         let handle = unsafe {
-            zvec_sys::zvec_query_params_ivf_create(nprobe, is_using_refiner, scale_factor)
+            zvec_rust_sys::zvec_query_params_ivf_create(nprobe, is_using_refiner, scale_factor)
         };
         IvfQueryParams { handle }
     }
 
     /// Sets the number of probe clusters.
     pub fn set_nprobe(&mut self, nprobe: i32) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_query_params_ivf_set_nprobe(self.handle, nprobe) })
+        check_error(unsafe { zvec_rust_sys::zvec_query_params_ivf_set_nprobe(self.handle, nprobe) })
     }
 
     /// Returns the number of probe clusters.
     pub fn nprobe(&self) -> i32 {
-        unsafe { zvec_sys::zvec_query_params_ivf_get_nprobe(self.handle) }
+        unsafe { zvec_rust_sys::zvec_query_params_ivf_get_nprobe(self.handle) }
     }
 }
 
 impl Drop for IvfQueryParams {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_query_params_ivf_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_query_params_ivf_destroy(self.handle) };
         }
     }
 }
 
 /// Flat-specific query parameters.
 pub struct FlatQueryParams {
-    pub(crate) handle: *mut zvec_sys::zvec_flat_query_params_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_flat_query_params_t,
 }
 
 impl FlatQueryParams {
     /// Creates new Flat query parameters.
     pub fn new(is_using_refiner: bool, scale_factor: f32) -> Self {
         let handle =
-            unsafe { zvec_sys::zvec_query_params_flat_create(is_using_refiner, scale_factor) };
+            unsafe { zvec_rust_sys::zvec_query_params_flat_create(is_using_refiner, scale_factor) };
         FlatQueryParams { handle }
     }
 }
@@ -85,14 +85,14 @@ impl FlatQueryParams {
 impl Drop for FlatQueryParams {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_query_params_flat_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_query_params_flat_destroy(self.handle) };
         }
     }
 }
 
 /// FTS-specific query parameters controlling the default boolean operator.
 pub struct FtsQueryParams {
-    pub(crate) handle: *mut zvec_sys::zvec_fts_query_params_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_fts_query_params_t,
 }
 
 impl FtsQueryParams {
@@ -103,7 +103,7 @@ impl FtsQueryParams {
     pub fn new(default_operator: Option<&str>) -> Result<Self> {
         let c_op = default_operator.map(to_cstring).transpose()?;
         let handle = unsafe {
-            zvec_sys::zvec_query_params_fts_create(
+            zvec_rust_sys::zvec_query_params_fts_create(
                 c_op.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
             )
         };
@@ -120,14 +120,14 @@ impl FtsQueryParams {
     pub fn set_default_operator(&mut self, op: &str) -> Result<()> {
         let c_op = to_cstring(op)?;
         check_error(unsafe {
-            zvec_sys::zvec_query_params_fts_set_default_operator(self.handle, c_op.as_ptr())
+            zvec_rust_sys::zvec_query_params_fts_set_default_operator(self.handle, c_op.as_ptr())
         })
     }
 
     /// Returns the default boolean operator.
     pub fn default_operator(&self) -> Option<String> {
         unsafe {
-            let ptr = zvec_sys::zvec_query_params_fts_get_default_operator(self.handle);
+            let ptr = zvec_rust_sys::zvec_query_params_fts_get_default_operator(self.handle);
             if ptr.is_null() {
                 return None;
             }
@@ -139,7 +139,7 @@ impl FtsQueryParams {
 impl Drop for FtsQueryParams {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_query_params_fts_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_query_params_fts_destroy(self.handle) };
         }
     }
 }
@@ -149,13 +149,13 @@ impl Drop for FtsQueryParams {
 /// - `query_string`: a boolean / advanced query expression
 /// - `match_string`: a natural-language match string
 pub struct Fts {
-    pub(crate) handle: *mut zvec_sys::zvec_fts_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_fts_t,
 }
 
 impl Fts {
     /// Creates a new FTS query payload.
     pub fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_fts_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_fts_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -168,19 +168,19 @@ impl Fts {
     /// Sets the boolean / advanced query expression.
     pub fn set_query_string(&mut self, query: &str) -> Result<()> {
         let c = to_cstring(query)?;
-        check_error(unsafe { zvec_sys::zvec_fts_set_query_string(self.handle, c.as_ptr()) })
+        check_error(unsafe { zvec_rust_sys::zvec_fts_set_query_string(self.handle, c.as_ptr()) })
     }
 
     /// Sets the natural-language match string.
     pub fn set_match_string(&mut self, match_str: &str) -> Result<()> {
         let c = to_cstring(match_str)?;
-        check_error(unsafe { zvec_sys::zvec_fts_set_match_string(self.handle, c.as_ptr()) })
+        check_error(unsafe { zvec_rust_sys::zvec_fts_set_match_string(self.handle, c.as_ptr()) })
     }
 
     /// Returns the query expression, or `None` if not set.
     pub fn query_string(&self) -> Option<String> {
         unsafe {
-            let ptr = zvec_sys::zvec_fts_get_query_string(self.handle);
+            let ptr = zvec_rust_sys::zvec_fts_get_query_string(self.handle);
             if ptr.is_null() {
                 return None;
             }
@@ -191,7 +191,7 @@ impl Fts {
     /// Returns the match string, or `None` if not set.
     pub fn match_string(&self) -> Option<String> {
         unsafe {
-            let ptr = zvec_sys::zvec_fts_get_match_string(self.handle);
+            let ptr = zvec_rust_sys::zvec_fts_get_match_string(self.handle);
             if ptr.is_null() {
                 return None;
             }
@@ -203,14 +203,14 @@ impl Fts {
 impl Drop for Fts {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_fts_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_fts_destroy(self.handle) };
         }
     }
 }
 
 /// A vector similarity search query.
 pub struct SearchQuery {
-    pub(crate) handle: *mut zvec_sys::zvec_vector_query_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_vector_query_t,
 }
 
 impl SearchQuery {
@@ -218,7 +218,7 @@ impl SearchQuery {
     ///
     /// # Safety
     /// The caller must not use the handle after the `SearchQuery` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_vector_query_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_vector_query_t {
         self.handle
     }
 
@@ -227,13 +227,13 @@ impl SearchQuery {
     /// # Safety
     /// The caller must ensure the handle is valid and was created by the zvec C API.
     /// The `SearchQuery` takes ownership and will call `zvec_vector_query_destroy` on drop.
-    pub unsafe fn from_raw(handle: *mut zvec_sys::zvec_vector_query_t) -> Self {
+    pub unsafe fn from_raw(handle: *mut zvec_rust_sys::zvec_vector_query_t) -> Self {
         SearchQuery { handle }
     }
 
     /// Creates a new vector query with the given field name, query vector, and topk.
     pub fn new(field_name: &str, vector: &[f32], topk: i32) -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_vector_query_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_vector_query_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -245,16 +245,16 @@ impl SearchQuery {
         let query = SearchQuery { handle };
 
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
+            zvec_rust_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
         })?;
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_query_vector(
+            zvec_rust_sys::zvec_vector_query_set_query_vector(
                 query.handle,
                 vector.as_ptr() as *const c_void,
                 std::mem::size_of_val(vector),
             )
         })?;
-        check_error(unsafe { zvec_sys::zvec_vector_query_set_topk(query.handle, topk) })?;
+        check_error(unsafe { zvec_rust_sys::zvec_vector_query_set_topk(query.handle, topk) })?;
 
         Ok(query)
     }
@@ -268,18 +268,22 @@ impl SearchQuery {
     pub fn set_filter(&mut self, filter: &str) -> Result<()> {
         let c_filter = to_cstring(filter)?;
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_filter(self.handle, c_filter.as_ptr())
+            zvec_rust_sys::zvec_vector_query_set_filter(self.handle, c_filter.as_ptr())
         })
     }
 
     /// Sets whether to include vector data in results.
     pub fn set_include_vector(&mut self, include: bool) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_vector_query_set_include_vector(self.handle, include) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_vector_query_set_include_vector(self.handle, include)
+        })
     }
 
     /// Sets whether to include doc ID in results.
     pub fn set_include_doc_id(&mut self, include: bool) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_vector_query_set_include_doc_id(self.handle, include) })
+        check_error(unsafe {
+            zvec_rust_sys::zvec_vector_query_set_include_doc_id(self.handle, include)
+        })
     }
 
     /// Sets the output fields to include in results.
@@ -290,7 +294,7 @@ impl SearchQuery {
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_fields.iter().map(|f| f.as_ptr()).collect();
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_output_fields(
+            zvec_rust_sys::zvec_vector_query_set_output_fields(
                 self.handle,
                 c_ptrs.as_ptr(),
                 c_ptrs.len(),
@@ -301,7 +305,7 @@ impl SearchQuery {
     /// Sets HNSW query parameters (takes ownership on success).
     pub fn set_hnsw_params(&mut self, mut params: HnswQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_hnsw_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_vector_query_set_hnsw_params(self.handle, params.handle)
         })?;
         // Ownership transferred to query only on success; prevent double-free
         params.handle = std::ptr::null_mut();
@@ -311,7 +315,7 @@ impl SearchQuery {
     /// Sets IVF query parameters (takes ownership on success).
     pub fn set_ivf_params(&mut self, mut params: IvfQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_ivf_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_vector_query_set_ivf_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -320,7 +324,7 @@ impl SearchQuery {
     /// Sets Flat query parameters (takes ownership on success).
     pub fn set_flat_params(&mut self, mut params: FlatQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_flat_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_vector_query_set_flat_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -329,7 +333,7 @@ impl SearchQuery {
     /// Sets FTS query parameters (takes ownership on success).
     pub fn set_fts_params(&mut self, mut params: FtsQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_vector_query_set_fts_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_vector_query_set_fts_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -337,14 +341,14 @@ impl SearchQuery {
 
     /// Sets FTS payload (payload is copied, caller retains ownership).
     pub fn set_fts(&mut self, fts: &Fts) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_vector_query_set_fts(self.handle, fts.handle) })
+        check_error(unsafe { zvec_rust_sys::zvec_vector_query_set_fts(self.handle, fts.handle) })
     }
 }
 
 impl Drop for SearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_vector_query_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_vector_query_destroy(self.handle) };
         }
     }
 }
@@ -474,7 +478,7 @@ impl SearchQueryBuilder {
 
 /// A grouped vector similarity search query.
 pub struct GroupBySearchQuery {
-    pub(crate) handle: *mut zvec_sys::zvec_group_by_vector_query_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_group_by_vector_query_t,
 }
 
 impl GroupBySearchQuery {
@@ -486,7 +490,7 @@ impl GroupBySearchQuery {
         group_count: u32,
         group_topk: u32,
     ) -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_group_by_vector_query_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_group_by_vector_query_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -498,26 +502,26 @@ impl GroupBySearchQuery {
         let c_group_field = to_cstring(group_by_field)?;
 
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_field_name(handle, c_field.as_ptr())
+            zvec_rust_sys::zvec_group_by_vector_query_set_field_name(handle, c_field.as_ptr())
         })?;
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_group_by_field_name(
+            zvec_rust_sys::zvec_group_by_vector_query_set_group_by_field_name(
                 handle,
                 c_group_field.as_ptr(),
             )
         })?;
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_query_vector(
+            zvec_rust_sys::zvec_group_by_vector_query_set_query_vector(
                 handle,
                 vector.as_ptr() as *const c_void,
                 std::mem::size_of_val(vector),
             )
         })?;
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_group_count(handle, group_count)
+            zvec_rust_sys::zvec_group_by_vector_query_set_group_count(handle, group_count)
         })?;
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_group_topk(handle, group_topk)
+            zvec_rust_sys::zvec_group_by_vector_query_set_group_topk(handle, group_topk)
         })?;
 
         Ok(GroupBySearchQuery { handle })
@@ -527,14 +531,14 @@ impl GroupBySearchQuery {
     pub fn set_filter(&mut self, filter: &str) -> Result<()> {
         let c_filter = to_cstring(filter)?;
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_filter(self.handle, c_filter.as_ptr())
+            zvec_rust_sys::zvec_group_by_vector_query_set_filter(self.handle, c_filter.as_ptr())
         })
     }
 
     /// Sets whether to include vector data in results.
     pub fn set_include_vector(&mut self, include: bool) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_include_vector(self.handle, include)
+            zvec_rust_sys::zvec_group_by_vector_query_set_include_vector(self.handle, include)
         })
     }
 
@@ -546,7 +550,7 @@ impl GroupBySearchQuery {
             .collect::<Result<Vec<_>>>()?;
         let c_ptrs: Vec<_> = c_fields.iter().map(|f| f.as_ptr()).collect();
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_output_fields(
+            zvec_rust_sys::zvec_group_by_vector_query_set_output_fields(
                 self.handle,
                 c_ptrs.as_ptr(),
                 c_ptrs.len(),
@@ -557,7 +561,7 @@ impl GroupBySearchQuery {
     /// Sets HNSW query parameters (takes ownership on success).
     pub fn set_hnsw_params(&mut self, mut params: HnswQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_hnsw_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_group_by_vector_query_set_hnsw_params(self.handle, params.handle)
         })?;
         // Ownership transferred to query only on success; prevent double-free
         params.handle = std::ptr::null_mut();
@@ -567,7 +571,7 @@ impl GroupBySearchQuery {
     /// Sets IVF query parameters (takes ownership on success).
     pub fn set_ivf_params(&mut self, mut params: IvfQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_ivf_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_group_by_vector_query_set_ivf_params(self.handle, params.handle)
         })?;
         // Ownership transferred to query only on success; prevent double-free
         params.handle = std::ptr::null_mut();
@@ -577,7 +581,7 @@ impl GroupBySearchQuery {
     /// Sets Flat query parameters (takes ownership on success).
     pub fn set_flat_params(&mut self, mut params: FlatQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_group_by_vector_query_set_flat_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_group_by_vector_query_set_flat_params(self.handle, params.handle)
         })?;
         // Ownership transferred to query only on success; prevent double-free
         params.handle = std::ptr::null_mut();
@@ -588,7 +592,7 @@ impl GroupBySearchQuery {
 impl Drop for GroupBySearchQuery {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_group_by_vector_query_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_group_by_vector_query_destroy(self.handle) };
         }
     }
 }

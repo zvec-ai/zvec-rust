@@ -37,27 +37,25 @@ zvec-rust/
 └── fuzz/        # Fuzz testing targets
 ```
 
-- **`zvec-sys`** — Raw `extern "C"` declarations, opaque pointer types, and constants
-- **`zvec`** — Safe wrappers with RAII, builders, iterators, and idiomatic Rust APIs
+- **`zvec-rust-sys`** — Raw `extern "C"` declarations, opaque pointer types, and constants
+- **`zvec-rust`** — Safe wrappers with RAII, builders, iterators, and idiomatic Rust APIs
 
 ## Prerequisites
 
-The Rust SDK depends on the zvec C library (`libzvec_c_api`). **For most users, no manual setup is needed** — the build script automatically downloads a prebuilt library from GitHub Releases.
+The Rust SDK depends on the zvec C library (`libzvec_c_api`). Choose one of the following ways to provide it:
 
-### For Regular Users (Zero Setup)
+### Option 1: Bundled Prebuilt Library (Zero Setup)
 
-Just add the dependency — the build script handles everything:
+Enable the `bundled` feature and `build.rs` will automatically download the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and set up the library path via `rpath`:
 
 ```toml
 [dependencies]
-zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0" }
+zvec-rust = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", features = ["bundled"] }
 ```
 
-On first build, `build.rs` will automatically download the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and set up the library path via `rpath`.
+### Option 2: Custom Build
 
-### For Advanced Users (Custom Build)
-
-If you want to build the zvec C library yourself (e.g., for a custom configuration or unsupported platform), set the `ZVEC_LIB_DIR` environment variable to override the automatic download:
+If you want to build the zvec C library yourself (e.g., for a custom configuration or unsupported platform), set the `ZVEC_LIB_DIR` environment variable:
 
 ```bash
 # Build zvec from source
@@ -94,9 +92,9 @@ Set `ZVEC_AUTO_BUILD=0` to disable steps 5 and 6.
 ## Quick Start
 
 ```rust
-use zvec::*;
+use zvec_rust::*;
 
-fn main() -> zvec::Result<()> {
+fn main() -> zvec_rust::Result<()> {
     // 1. Initialize the engine
     initialize(None)?;
 

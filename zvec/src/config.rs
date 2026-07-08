@@ -10,7 +10,7 @@ use crate::types::LogLevel;
 ///
 /// # Example
 /// ```no_run
-/// use zvec::ConfigBuilder;
+/// use zvec_rust::ConfigBuilder;
 ///
 /// let config = ConfigBuilder::new()
 ///     .memory_limit(1024 * 1024 * 1024)
@@ -82,12 +82,12 @@ impl Default for ConfigBuilder {
 
 /// Low-level configuration handle wrapping the C API config.
 pub(crate) struct ConfigData {
-    pub(crate) handle: *mut zvec_sys::zvec_config_data_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_config_data_t,
 }
 
 impl ConfigData {
     pub(crate) fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_config_data_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_config_data_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -98,29 +98,29 @@ impl ConfigData {
     }
 
     pub(crate) fn set_memory_limit(&mut self, bytes: u64) -> Result<()> {
-        check_error(unsafe { zvec_sys::zvec_config_data_set_memory_limit(self.handle, bytes) })
+        check_error(unsafe { zvec_rust_sys::zvec_config_data_set_memory_limit(self.handle, bytes) })
     }
 
     pub(crate) fn set_query_thread_count(&mut self, count: u32) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_config_data_set_query_thread_count(self.handle, count)
+            zvec_rust_sys::zvec_config_data_set_query_thread_count(self.handle, count)
         })
     }
 
     pub(crate) fn set_optimize_thread_count(&mut self, count: u32) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_config_data_set_optimize_thread_count(self.handle, count)
+            zvec_rust_sys::zvec_config_data_set_optimize_thread_count(self.handle, count)
         })
     }
 
     pub(crate) fn set_fts_brute_force_by_keys_ratio(&mut self, ratio: f32) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_config_data_set_fts_brute_force_by_keys_ratio(self.handle, ratio)
+            zvec_rust_sys::zvec_config_data_set_fts_brute_force_by_keys_ratio(self.handle, ratio)
         })
     }
 
     pub(crate) fn set_console_log(&mut self, level: LogLevel) -> Result<()> {
-        let log_config = unsafe { zvec_sys::zvec_config_log_create_console(level as u32) };
+        let log_config = unsafe { zvec_rust_sys::zvec_config_log_create_console(level as u32) };
         if log_config.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -130,10 +130,10 @@ impl ConfigData {
         // Ownership of log_config transfers to config_data on success.
         // On failure, we must free it manually to avoid a leak.
         let result = check_error(unsafe {
-            zvec_sys::zvec_config_data_set_log_config(self.handle, log_config)
+            zvec_rust_sys::zvec_config_data_set_log_config(self.handle, log_config)
         });
         if result.is_err() {
-            unsafe { zvec_sys::zvec_config_log_destroy(log_config) };
+            unsafe { zvec_rust_sys::zvec_config_log_destroy(log_config) };
         }
         result
     }
@@ -143,7 +143,7 @@ impl Drop for ConfigData {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             // Safety: handle was created by zvec_config_data_create
-            unsafe { zvec_sys::zvec_config_data_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_config_data_destroy(self.handle) };
         }
     }
 }
@@ -156,7 +156,7 @@ impl Drop for ConfigData {
 /// # Examples
 ///
 /// ```no_run
-/// use zvec::*;
+/// use zvec_rust::*;
 ///
 /// // Default initialization
 /// initialize(None)?;
@@ -167,11 +167,11 @@ impl Drop for ConfigData {
 ///     .num_threads(4)
 ///     .build();
 /// initialize(Some(&config))?;
-/// # Ok::<(), zvec::Error>(())
+/// # Ok::<(), zvec_rust::Error>(())
 /// ```
 pub fn initialize(config: Option<&ConfigBuilder>) -> Result<()> {
     match config {
-        None => check_error(unsafe { zvec_sys::zvec_initialize(std::ptr::null()) }),
+        None => check_error(unsafe { zvec_rust_sys::zvec_initialize(std::ptr::null()) }),
         Some(builder) => {
             let mut cfg = ConfigData::new()?;
             if builder.memory_limit > 0 {
@@ -187,7 +187,7 @@ pub fn initialize(config: Option<&ConfigBuilder>) -> Result<()> {
             if let Some(ratio) = builder.fts_brute_force_by_keys_ratio {
                 cfg.set_fts_brute_force_by_keys_ratio(ratio)?;
             }
-            check_error(unsafe { zvec_sys::zvec_initialize(cfg.handle as *const _) })
+            check_error(unsafe { zvec_rust_sys::zvec_initialize(cfg.handle as *const _) })
         }
     }
 }
@@ -195,18 +195,18 @@ pub fn initialize(config: Option<&ConfigBuilder>) -> Result<()> {
 /// Shuts down the zvec library and releases all resources.
 #[doc(hidden)]
 pub fn shutdown() -> Result<()> {
-    check_error(unsafe { zvec_sys::zvec_shutdown() })
+    check_error(unsafe { zvec_rust_sys::zvec_shutdown() })
 }
 
 /// Returns `true` if the library has been initialized.
 pub fn is_initialized() -> bool {
-    unsafe { zvec_sys::zvec_is_initialized() }
+    unsafe { zvec_rust_sys::zvec_is_initialized() }
 }
 
 /// Returns the library version string.
 pub fn version() -> String {
     unsafe {
-        let ptr = zvec_sys::zvec_get_version();
+        let ptr = zvec_rust_sys::zvec_get_version();
         if ptr.is_null() {
             return String::new();
         }
@@ -216,22 +216,22 @@ pub fn version() -> String {
 
 /// Checks if the current library version meets the minimum requirements.
 pub fn check_version(major: i32, minor: i32, patch: i32) -> bool {
-    unsafe { zvec_sys::zvec_check_version(major, minor, patch) }
+    unsafe { zvec_rust_sys::zvec_check_version(major, minor, patch) }
 }
 
 /// Returns the major version number.
 pub fn version_major() -> i32 {
-    unsafe { zvec_sys::zvec_get_version_major() }
+    unsafe { zvec_rust_sys::zvec_get_version_major() }
 }
 
 /// Returns the minor version number.
 pub fn version_minor() -> i32 {
-    unsafe { zvec_sys::zvec_get_version_minor() }
+    unsafe { zvec_rust_sys::zvec_get_version_minor() }
 }
 
 /// Returns the patch version number.
 pub fn version_patch() -> i32 {
-    unsafe { zvec_sys::zvec_get_version_patch() }
+    unsafe { zvec_rust_sys::zvec_get_version_patch() }
 }
 
 #[cfg(test)]

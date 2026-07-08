@@ -5,7 +5,7 @@ use crate::types::{DataType, IndexType, MetricType, QuantizeType};
 
 /// Parameters for configuring an index on a field.
 pub struct IndexParams {
-    pub(crate) handle: *mut zvec_sys::zvec_index_params_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_index_params_t,
     owned: bool,
 }
 
@@ -14,25 +14,25 @@ impl IndexParams {
     ///
     /// # Safety
     /// The caller must not use the handle after the `IndexParams` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_index_params_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_index_params_t {
         self.handle
     }
 
     /// Creates HNSW index parameters.
     pub fn hnsw(metric: MetricType, m: i32, ef_construction: i32) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Hnsw as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Hnsw as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
                     message: "failed to create HNSW index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(
+            check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
                 handle,
                 metric as u32,
             ))?;
-            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+            check_error(zvec_rust_sys::zvec_index_params_set_hnsw_params(
                 handle,
                 m,
                 ef_construction,
@@ -52,23 +52,23 @@ impl IndexParams {
         quantize: QuantizeType,
     ) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Hnsw as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Hnsw as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
                     message: "failed to create HNSW index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(
+            check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
                 handle,
                 metric as u32,
             ))?;
-            check_error(zvec_sys::zvec_index_params_set_hnsw_params(
+            check_error(zvec_rust_sys::zvec_index_params_set_hnsw_params(
                 handle,
                 m,
                 ef_construction,
             ))?;
-            check_error(zvec_sys::zvec_index_params_set_quantize_type(
+            check_error(zvec_rust_sys::zvec_index_params_set_quantize_type(
                 handle,
                 quantize as u32,
             ))?;
@@ -82,18 +82,18 @@ impl IndexParams {
     /// Creates IVF index parameters.
     pub fn ivf(metric: MetricType, n_list: i32, n_iters: i32, use_soar: bool) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Ivf as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Ivf as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
                     message: "failed to create IVF index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(
+            check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
                 handle,
                 metric as u32,
             ))?;
-            check_error(zvec_sys::zvec_index_params_set_ivf_params(
+            check_error(zvec_rust_sys::zvec_index_params_set_ivf_params(
                 handle, n_list, n_iters, use_soar,
             ))?;
             Ok(IndexParams {
@@ -106,14 +106,14 @@ impl IndexParams {
     /// Creates Flat index parameters.
     pub fn flat(metric: MetricType) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Flat as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Flat as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
                     message: "failed to create Flat index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_metric_type(
+            check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
                 handle,
                 metric as u32,
             ))?;
@@ -127,14 +127,14 @@ impl IndexParams {
     /// Creates inverted index parameters for scalar fields.
     pub fn invert(enable_range_opt: bool, enable_wildcard: bool) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Invert as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Invert as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
                     message: "failed to create Invert index params".into(),
                 });
             }
-            check_error(zvec_sys::zvec_index_params_set_invert_params(
+            check_error(zvec_rust_sys::zvec_index_params_set_invert_params(
                 handle,
                 enable_range_opt,
                 enable_wildcard,
@@ -155,7 +155,7 @@ impl IndexParams {
         extra_params: Option<&str>,
     ) -> Result<Self> {
         unsafe {
-            let handle = zvec_sys::zvec_index_params_create(IndexType::Fts as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Fts as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
@@ -166,17 +166,17 @@ impl IndexParams {
             let c_extra = extra_params.map(to_cstring).transpose()?;
 
             let filter_array = if let Some(f) = filters {
-                let arr = zvec_sys::zvec_string_array_create(f.len());
+                let arr = zvec_rust_sys::zvec_string_array_create(f.len());
                 for (i, s) in f.iter().enumerate() {
                     let cs = to_cstring(s)?;
-                    zvec_sys::zvec_string_array_add(arr, i, cs.as_ptr());
+                    zvec_rust_sys::zvec_string_array_add(arr, i, cs.as_ptr());
                 }
                 arr
             } else {
                 std::ptr::null_mut()
             };
 
-            let result = check_error(zvec_sys::zvec_index_params_set_fts_params(
+            let result = check_error(zvec_rust_sys::zvec_index_params_set_fts_params(
                 handle,
                 c_tokenizer
                     .as_ref()
@@ -186,7 +186,7 @@ impl IndexParams {
             ));
 
             if !filter_array.is_null() {
-                zvec_sys::zvec_string_array_destroy(filter_array);
+                zvec_rust_sys::zvec_string_array_destroy(filter_array);
             }
             result?;
             Ok(IndexParams {
@@ -198,30 +198,32 @@ impl IndexParams {
 
     /// Returns the index type.
     pub fn index_type(&self) -> IndexType {
-        IndexType::from(unsafe { zvec_sys::zvec_index_params_get_type(self.handle) })
+        IndexType::from(unsafe { zvec_rust_sys::zvec_index_params_get_type(self.handle) })
     }
 
     /// Returns the metric type.
     pub fn metric_type(&self) -> MetricType {
-        MetricType::from(unsafe { zvec_sys::zvec_index_params_get_metric_type(self.handle) })
+        MetricType::from(unsafe { zvec_rust_sys::zvec_index_params_get_metric_type(self.handle) })
     }
 
     /// Returns the quantize type.
     pub fn quantize_type(&self) -> QuantizeType {
-        QuantizeType::from(unsafe { zvec_sys::zvec_index_params_get_quantize_type(self.handle) })
+        QuantizeType::from(unsafe {
+            zvec_rust_sys::zvec_index_params_get_quantize_type(self.handle)
+        })
     }
 
     /// Sets the metric type.
     pub fn set_metric_type(&mut self, metric: MetricType) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_index_params_set_metric_type(self.handle, metric as u32)
+            zvec_rust_sys::zvec_index_params_set_metric_type(self.handle, metric as u32)
         })
     }
 
     /// Sets the quantize type.
     pub fn set_quantize_type(&mut self, quantize: QuantizeType) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_index_params_set_quantize_type(self.handle, quantize as u32)
+            zvec_rust_sys::zvec_index_params_set_quantize_type(self.handle, quantize as u32)
         })
     }
 }
@@ -229,14 +231,14 @@ impl IndexParams {
 impl Drop for IndexParams {
     fn drop(&mut self) {
         if self.owned && !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_index_params_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_index_params_destroy(self.handle) };
         }
     }
 }
 
 /// Schema definition for a single field in a collection.
 pub struct FieldSchema {
-    pub(crate) handle: *mut zvec_sys::zvec_field_schema_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_field_schema_t,
     owned: bool,
 }
 
@@ -250,7 +252,7 @@ impl FieldSchema {
     pub fn new(name: &str, data_type: DataType, nullable: bool, dimension: u32) -> Result<Self> {
         let c_name = to_cstring(name)?;
         let handle = unsafe {
-            zvec_sys::zvec_field_schema_create(
+            zvec_rust_sys::zvec_field_schema_create(
                 c_name.as_ptr(),
                 data_type as u32,
                 nullable,
@@ -271,7 +273,7 @@ impl FieldSchema {
 
     /// Creates a non-owning wrapper around an existing handle.
     #[allow(dead_code)]
-    pub(crate) fn from_borrowed(handle: *mut zvec_sys::zvec_field_schema_t) -> Self {
+    pub(crate) fn from_borrowed(handle: *mut zvec_rust_sys::zvec_field_schema_t) -> Self {
         FieldSchema {
             handle,
             owned: false,
@@ -281,14 +283,14 @@ impl FieldSchema {
     /// Sets the index parameters for this field.
     pub fn set_index_params(&mut self, params: &IndexParams) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_field_schema_set_index_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_field_schema_set_index_params(self.handle, params.handle)
         })
     }
 
     /// Returns the field name.
     pub fn name(&self) -> &str {
         unsafe {
-            let ptr = zvec_sys::zvec_field_schema_get_name(self.handle);
+            let ptr = zvec_rust_sys::zvec_field_schema_get_name(self.handle);
             if ptr.is_null() {
                 return "";
             }
@@ -298,61 +300,61 @@ impl FieldSchema {
 
     /// Returns the data type.
     pub fn data_type(&self) -> DataType {
-        DataType::from(unsafe { zvec_sys::zvec_field_schema_get_data_type(self.handle) })
+        DataType::from(unsafe { zvec_rust_sys::zvec_field_schema_get_data_type(self.handle) })
     }
 
     /// Returns the dimension (for vector fields).
     pub fn dimension(&self) -> u32 {
-        unsafe { zvec_sys::zvec_field_schema_get_dimension(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_get_dimension(self.handle) }
     }
 
     /// Returns whether the field is nullable.
     pub fn is_nullable(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_is_nullable(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_is_nullable(self.handle) }
     }
 
     /// Returns whether this is a vector field.
     pub fn is_vector_field(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_is_vector_field(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_is_vector_field(self.handle) }
     }
 
     /// Returns whether this is a dense vector field.
     pub fn is_dense_vector(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_is_dense_vector(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_is_dense_vector(self.handle) }
     }
 
     /// Returns whether this is a sparse vector field.
     pub fn is_sparse_vector(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_is_sparse_vector(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_is_sparse_vector(self.handle) }
     }
 
     /// Returns whether this field has an index.
     pub fn has_index(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_has_index(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_has_index(self.handle) }
     }
 
     /// Returns the index type.
     pub fn index_type(&self) -> IndexType {
-        IndexType::from(unsafe { zvec_sys::zvec_field_schema_get_index_type(self.handle) })
+        IndexType::from(unsafe { zvec_rust_sys::zvec_field_schema_get_index_type(self.handle) })
     }
 
     /// Returns whether this is an array type.
     pub fn is_array_type(&self) -> bool {
-        unsafe { zvec_sys::zvec_field_schema_is_array_type(self.handle) }
+        unsafe { zvec_rust_sys::zvec_field_schema_is_array_type(self.handle) }
     }
 }
 
 impl Drop for FieldSchema {
     fn drop(&mut self) {
         if self.owned && !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_field_schema_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_field_schema_destroy(self.handle) };
         }
     }
 }
 
 /// Schema definition for a collection, containing field definitions.
 pub struct CollectionSchema {
-    pub(crate) handle: *mut zvec_sys::zvec_collection_schema_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_collection_schema_t,
     owned: bool,
 }
 
@@ -360,7 +362,7 @@ impl CollectionSchema {
     /// Creates a new collection schema with the given name.
     pub fn new(name: &str) -> Result<Self> {
         let c_name = to_cstring(name)?;
-        let handle = unsafe { zvec_sys::zvec_collection_schema_create(c_name.as_ptr()) };
+        let handle = unsafe { zvec_rust_sys::zvec_collection_schema_create(c_name.as_ptr()) };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -379,7 +381,7 @@ impl CollectionSchema {
     }
 
     /// Creates a non-owning wrapper around an existing handle.
-    pub(crate) fn from_owned(handle: *mut zvec_sys::zvec_collection_schema_t) -> Self {
+    pub(crate) fn from_owned(handle: *mut zvec_rust_sys::zvec_collection_schema_t) -> Self {
         CollectionSchema {
             handle,
             owned: true,
@@ -389,14 +391,14 @@ impl CollectionSchema {
     /// Adds a field to the schema.
     pub fn add_field(&mut self, field: &FieldSchema) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_collection_schema_add_field(self.handle, field.handle)
+            zvec_rust_sys::zvec_collection_schema_add_field(self.handle, field.handle)
         })
     }
 
     /// Returns the collection name.
     pub fn name(&self) -> &str {
         unsafe {
-            let ptr = zvec_sys::zvec_collection_schema_get_name(self.handle);
+            let ptr = zvec_rust_sys::zvec_collection_schema_get_name(self.handle);
             if ptr.is_null() {
                 return "";
             }
@@ -410,7 +412,7 @@ impl CollectionSchema {
             Ok(s) => s,
             Err(_) => return false,
         };
-        unsafe { zvec_sys::zvec_collection_schema_has_field(self.handle, c_name.as_ptr()) }
+        unsafe { zvec_rust_sys::zvec_collection_schema_has_field(self.handle, c_name.as_ptr()) }
     }
 
     /// Checks if a field has an index.
@@ -419,14 +421,14 @@ impl CollectionSchema {
             Ok(s) => s,
             Err(_) => return false,
         };
-        unsafe { zvec_sys::zvec_collection_schema_has_index(self.handle, c_name.as_ptr()) }
+        unsafe { zvec_rust_sys::zvec_collection_schema_has_index(self.handle, c_name.as_ptr()) }
     }
 
     /// Drops a field from the schema.
     pub fn drop_field(&mut self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_collection_schema_drop_field(self.handle, c_name.as_ptr())
+            zvec_rust_sys::zvec_collection_schema_drop_field(self.handle, c_name.as_ptr())
         })
     }
 
@@ -434,7 +436,11 @@ impl CollectionSchema {
     pub fn add_index(&mut self, field_name: &str, params: &IndexParams) -> Result<()> {
         let c_name = to_cstring(field_name)?;
         check_error(unsafe {
-            zvec_sys::zvec_collection_schema_add_index(self.handle, c_name.as_ptr(), params.handle)
+            zvec_rust_sys::zvec_collection_schema_add_index(
+                self.handle,
+                c_name.as_ptr(),
+                params.handle,
+            )
         })
     }
 
@@ -442,27 +448,27 @@ impl CollectionSchema {
     pub fn drop_index(&mut self, field_name: &str) -> Result<()> {
         let c_name = to_cstring(field_name)?;
         check_error(unsafe {
-            zvec_sys::zvec_collection_schema_drop_index(self.handle, c_name.as_ptr())
+            zvec_rust_sys::zvec_collection_schema_drop_index(self.handle, c_name.as_ptr())
         })
     }
 
     /// Sets the maximum document count per segment.
     pub fn set_max_doc_count_per_segment(&mut self, count: u64) -> Result<()> {
         check_error(unsafe {
-            zvec_sys::zvec_collection_schema_set_max_doc_count_per_segment(self.handle, count)
+            zvec_rust_sys::zvec_collection_schema_set_max_doc_count_per_segment(self.handle, count)
         })
     }
 
     /// Returns the maximum document count per segment.
     pub fn max_doc_count_per_segment(&self) -> u64 {
-        unsafe { zvec_sys::zvec_collection_schema_get_max_doc_count_per_segment(self.handle) }
+        unsafe { zvec_rust_sys::zvec_collection_schema_get_max_doc_count_per_segment(self.handle) }
     }
 }
 
 impl Drop for CollectionSchema {
     fn drop(&mut self) {
         if self.owned && !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_collection_schema_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_collection_schema_destroy(self.handle) };
         }
     }
 }

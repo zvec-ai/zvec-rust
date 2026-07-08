@@ -1,6 +1,6 @@
-use zvec::*;
+use zvec_rust::*;
 
-fn main() -> zvec::Result<()> {
+fn main() -> zvec_rust::Result<()> {
     println!("zvec version: {}", version());
 
     // === Example 1: Default Initialization ===

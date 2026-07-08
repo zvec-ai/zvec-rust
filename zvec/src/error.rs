@@ -107,20 +107,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// Returns `Ok(())` if the code is `ZVEC_OK`, otherwise fetches the last error
 /// message from the C library and returns an appropriate `Error`.
-pub(crate) fn check_error(code: zvec_sys::zvec_error_code_t) -> Result<()> {
-    if code == zvec_sys::ZVEC_OK {
+pub(crate) fn check_error(code: zvec_rust_sys::zvec_error_code_t) -> Result<()> {
+    if code == zvec_rust_sys::ZVEC_OK {
         return Ok(());
     }
 
     let message = unsafe {
         let mut c_msg: *mut std::os::raw::c_char = std::ptr::null_mut();
-        zvec_sys::zvec_get_last_error(&mut c_msg);
+        zvec_rust_sys::zvec_get_last_error(&mut c_msg);
 
         let msg = if c_msg.is_null() {
             "unknown error".to_string()
         } else {
             let s = CStr::from_ptr(c_msg).to_string_lossy().into_owned();
-            zvec_sys::zvec_free(c_msg as *mut c_void);
+            zvec_rust_sys::zvec_free(c_msg as *mut c_void);
             s
         };
         msg

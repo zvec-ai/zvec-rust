@@ -1,4 +1,4 @@
-# zvec-sys
+# zvec-rust-sys
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 
@@ -6,9 +6,9 @@ Raw FFI bindings to the [zvec](https://github.com/alibaba/zvec) C-API (`libzvec_
 
 ## Overview
 
-This crate provides low-level, unsafe Rust bindings to the zvec vector database C library. It is intended to be used by the higher-level [`zvec`](https://crates.io/crates/zvec) crate, which provides safe, idiomatic Rust APIs.
+This crate provides low-level, unsafe Rust bindings to the zvec vector database C library. It is intended to be used by the higher-level [`zvec-rust`](https://crates.io/crates/zvec-rust) crate, which provides safe, idiomatic Rust APIs.
 
-**You probably want to use the [`zvec`](https://crates.io/crates/zvec) crate instead.**
+**You probably want to use the [`zvec-rust`](https://crates.io/crates/zvec-rust) crate instead.**
 
 ## Contents
 
@@ -33,10 +33,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-zvec-sys = { path = "../zvec-sys" }
+zvec-rust-sys = { path = "../zvec-sys" }
 ```
 
-All functions are `unsafe` and require careful handling of raw pointers and C memory management. Prefer the safe `zvec` crate for application code.
+All functions are `unsafe` and require careful handling of raw pointers and C memory management. Prefer the safe `zvec-rust` crate for application code.
 
 ## License
 

@@ -1,5 +1,5 @@
 [package]
-name = "zvec"
+name = "zvec-rust"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,7 +11,14 @@ keywords = ["vector-database", "zvec", "similarity-search", "embeddings", "hnsw"
 categories = ["database", "api-bindings"]
 
 [dependencies]
-zvec-sys = { path = "../zvec-sys", version = "0.5.0" }
+zvec-rust-sys = { path = "../zvec-sys", version = "0.5.0" }
+
+[features]
+default = []
+bundled = ["zvec-rust-sys/bundled"]
+
+[package.metadata.docs.rs]
+features = ["bundled"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

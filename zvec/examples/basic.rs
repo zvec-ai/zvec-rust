@@ -1,6 +1,6 @@
-use zvec::*;
+use zvec_rust::*;
 
-fn main() -> zvec::Result<()> {
+fn main() -> zvec_rust::Result<()> {
     // Initialize the zvec library
     println!("zvec version: {}", version());
     initialize(None)?;

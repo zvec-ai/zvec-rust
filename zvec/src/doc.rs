@@ -9,7 +9,7 @@ use crate::types::DataType;
 /// Documents contain typed fields and are used for both writing data to
 /// and reading data from collections.
 pub struct Doc {
-    pub(crate) handle: *mut zvec_sys::zvec_doc_t,
+    pub(crate) handle: *mut zvec_rust_sys::zvec_doc_t,
     owned: bool,
 }
 
@@ -18,7 +18,7 @@ impl Doc {
     ///
     /// # Safety
     /// The caller must not use the handle after the `Doc` is dropped.
-    pub unsafe fn as_raw(&self) -> *mut zvec_sys::zvec_doc_t {
+    pub unsafe fn as_raw(&self) -> *mut zvec_rust_sys::zvec_doc_t {
         self.handle
     }
 
@@ -27,7 +27,7 @@ impl Doc {
     /// # Safety
     /// The caller must ensure the handle is valid and was created by the zvec C API.
     /// The `Doc` takes ownership and will call `zvec_doc_destroy` on drop.
-    pub unsafe fn from_raw(handle: *mut zvec_sys::zvec_doc_t) -> Self {
+    pub unsafe fn from_raw(handle: *mut zvec_rust_sys::zvec_doc_t) -> Self {
         Doc {
             handle,
             owned: true,
@@ -36,7 +36,7 @@ impl Doc {
 
     /// Creates a new empty document.
     pub fn new() -> Result<Self> {
-        let handle = unsafe { zvec_sys::zvec_doc_create() };
+        let handle = unsafe { zvec_rust_sys::zvec_doc_create() };
         if handle.is_null() {
             return Err(Error {
                 code: ErrorCode::InternalError,
@@ -51,7 +51,7 @@ impl Doc {
 
     /// Creates a non-owning wrapper around an existing handle.
     #[allow(dead_code)]
-    pub(crate) fn from_borrowed(handle: *mut zvec_sys::zvec_doc_t) -> Self {
+    pub(crate) fn from_borrowed(handle: *mut zvec_rust_sys::zvec_doc_t) -> Self {
         Doc {
             handle,
             owned: false,
@@ -61,13 +61,13 @@ impl Doc {
     /// Sets the primary key.
     pub fn set_pk(&mut self, pk: &str) {
         let c_pk = to_cstring(pk).expect("pk must not contain null bytes");
-        unsafe { zvec_sys::zvec_doc_set_pk(self.handle, c_pk.as_ptr()) };
+        unsafe { zvec_rust_sys::zvec_doc_set_pk(self.handle, c_pk.as_ptr()) };
     }
 
     /// Returns the primary key, or `None` if not set.
     pub fn get_pk(&self) -> Option<&str> {
         unsafe {
-            let ptr = zvec_sys::zvec_doc_get_pk_pointer(self.handle);
+            let ptr = zvec_rust_sys::zvec_doc_get_pk_pointer(self.handle);
             if ptr.is_null() {
                 None
             } else {
@@ -78,22 +78,22 @@ impl Doc {
 
     /// Returns the document score (set by query results).
     pub fn get_score(&self) -> f32 {
-        unsafe { zvec_sys::zvec_doc_get_score(self.handle) }
+        unsafe { zvec_rust_sys::zvec_doc_get_score(self.handle) }
     }
 
     #[allow(dead_code)]
     pub(crate) fn get_doc_id(&self) -> u64 {
-        unsafe { zvec_sys::zvec_doc_get_doc_id(self.handle) }
+        unsafe { zvec_rust_sys::zvec_doc_get_doc_id(self.handle) }
     }
 
     /// Returns the number of fields in the document.
     pub fn field_count(&self) -> usize {
-        unsafe { zvec_sys::zvec_doc_get_field_count(self.handle) }
+        unsafe { zvec_rust_sys::zvec_doc_get_field_count(self.handle) }
     }
 
     /// Returns whether the document is empty.
     pub fn is_empty(&self) -> bool {
-        unsafe { zvec_sys::zvec_doc_is_empty(self.handle) }
+        unsafe { zvec_rust_sys::zvec_doc_is_empty(self.handle) }
     }
 
     /// Returns whether the document contains the specified field.
@@ -102,7 +102,7 @@ impl Doc {
             Ok(s) => s,
             Err(_) => return false,
         };
-        unsafe { zvec_sys::zvec_doc_has_field(self.handle, c_name.as_ptr()) }
+        unsafe { zvec_rust_sys::zvec_doc_has_field(self.handle, c_name.as_ptr()) }
     }
 
     /// Returns whether the specified field is null.
@@ -111,7 +111,7 @@ impl Doc {
             Ok(s) => s,
             Err(_) => return false,
         };
-        unsafe { zvec_sys::zvec_doc_is_field_null(self.handle, c_name.as_ptr()) }
+        unsafe { zvec_rust_sys::zvec_doc_is_field_null(self.handle, c_name.as_ptr()) }
     }
 
     // =========================================================================
@@ -124,7 +124,7 @@ impl Doc {
         let c_value = to_cstring(value)?;
         let bytes = c_value.as_bytes_with_nul();
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::String as u32,
@@ -138,7 +138,7 @@ impl Doc {
     pub fn add_bool(&mut self, name: &str, value: bool) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Bool as u32,
@@ -152,7 +152,7 @@ impl Doc {
     pub fn add_i32(&mut self, name: &str, value: i32) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Int32 as u32,
@@ -166,7 +166,7 @@ impl Doc {
     pub fn add_i64(&mut self, name: &str, value: i64) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Int64 as u32,
@@ -180,7 +180,7 @@ impl Doc {
     pub fn add_u32(&mut self, name: &str, value: u32) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Uint32 as u32,
@@ -194,7 +194,7 @@ impl Doc {
     pub fn add_u64(&mut self, name: &str, value: u64) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Uint64 as u32,
@@ -208,7 +208,7 @@ impl Doc {
     pub fn add_f32(&mut self, name: &str, value: f32) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Float as u32,
@@ -222,7 +222,7 @@ impl Doc {
     pub fn add_f64(&mut self, name: &str, value: f64) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Double as u32,
@@ -236,7 +236,7 @@ impl Doc {
     pub fn add_vector_f32(&mut self, name: &str, vector: &[f32]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::VectorFp32 as u32,
@@ -250,7 +250,7 @@ impl Doc {
     pub fn add_vector_f64(&mut self, name: &str, vector: &[f64]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::VectorFp64 as u32,
@@ -264,7 +264,7 @@ impl Doc {
     pub fn add_binary(&mut self, name: &str, value: &[u8]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::Binary as u32,
@@ -278,7 +278,7 @@ impl Doc {
     pub fn add_vector_i8(&mut self, name: &str, vector: &[i8]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::VectorInt8 as u32,
@@ -292,7 +292,7 @@ impl Doc {
     pub fn add_vector_i16(&mut self, name: &str, vector: &[i16]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 DataType::VectorInt16 as u32,
@@ -309,7 +309,7 @@ impl Doc {
     fn add_typed_array<T>(&mut self, name: &str, data_type: DataType, values: &[T]) -> Result<()> {
         let c_name = to_cstring(name)?;
         check_error(unsafe {
-            zvec_sys::zvec_doc_add_field_by_value(
+            zvec_rust_sys::zvec_doc_add_field_by_value(
                 self.handle,
                 c_name.as_ptr(),
                 data_type as u32,
@@ -357,13 +357,13 @@ impl Doc {
     /// Sets a field to null.
     pub fn set_field_null(&mut self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
-        check_error(unsafe { zvec_sys::zvec_doc_set_field_null(self.handle, c_name.as_ptr()) })
+        check_error(unsafe { zvec_rust_sys::zvec_doc_set_field_null(self.handle, c_name.as_ptr()) })
     }
 
     /// Removes a field from the document.
     pub fn remove_field(&mut self, name: &str) -> Result<()> {
         let c_name = to_cstring(name)?;
-        check_error(unsafe { zvec_sys::zvec_doc_remove_field(self.handle, c_name.as_ptr()) })
+        check_error(unsafe { zvec_rust_sys::zvec_doc_remove_field(self.handle, c_name.as_ptr()) })
     }
 
     // =========================================================================
@@ -381,7 +381,7 @@ impl Doc {
         let c_name = to_cstring(name)?;
         let mut value: T = T::default();
         check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_basic(
+            zvec_rust_sys::zvec_doc_get_field_value_basic(
                 self.handle,
                 c_name.as_ptr(),
                 data_type as u32,
@@ -401,7 +401,7 @@ impl Doc {
         let mut value_ptr: *const c_void = std::ptr::null();
         let mut value_size: usize = 0;
         check_error(unsafe {
-            zvec_sys::zvec_doc_get_field_value_pointer(
+            zvec_rust_sys::zvec_doc_get_field_value_pointer(
                 self.handle,
                 c_name.as_ptr(),
                 data_type as u32,
@@ -546,14 +546,14 @@ impl Doc {
 
     /// Clears all fields from the document.
     pub fn clear(&mut self) {
-        unsafe { zvec_sys::zvec_doc_clear(self.handle) };
+        unsafe { zvec_rust_sys::zvec_doc_clear(self.handle) };
     }
 }
 
 impl Drop for Doc {
     fn drop(&mut self) {
         if self.owned && !self.handle.is_null() {
-            unsafe { zvec_sys::zvec_doc_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_doc_destroy(self.handle) };
         }
     }
 }

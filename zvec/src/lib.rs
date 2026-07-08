@@ -7,9 +7,9 @@
 //! ## Quick Start
 //!
 //! ```no_run
-//! use zvec::*;
+//! use zvec_rust::*;
 //!
-//! fn main() -> zvec::Result<()> {
+//! fn main() -> zvec_rust::Result<()> {
 //!     initialize(None)?;
 //!
 //!     let schema = CollectionSchema::builder("example")
@@ -60,12 +60,12 @@ pub use schema::{CollectionSchema, FieldSchema, IndexParams};
 pub use types::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};
 
 /// Re-export the raw FFI bindings for advanced users.
-pub use zvec_sys as sys;
+pub use zvec_rust_sys as sys;
 
 /// Convenience prelude that re-exports the most commonly used types.
 ///
 /// ```ignore
-/// use zvec::prelude::*;
+/// use zvec_rust::prelude::*;
 /// ```
 pub mod prelude {
     pub use crate::{

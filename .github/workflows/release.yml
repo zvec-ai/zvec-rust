@@ -63,8 +63,8 @@ jobs:
           if [ "$SYS_VERSION" != "$TAG_VERSION" ] || [ "$SDK_VERSION" != "$TAG_VERSION" ]; then
             echo "Version mismatch!"
             echo "  Tag: $TAG_VERSION"
-            echo "  zvec-sys: $SYS_VERSION"
-            echo "  zvec: $SDK_VERSION"
+            echo "  zvec-rust-sys: $SYS_VERSION"
+            echo "  zvec-rust: $SDK_VERSION"
             exit 1
           fi
           echo "All versions match: $TAG_VERSION"
@@ -96,15 +96,13 @@ jobs:
           # Wait a moment for the release assets to be available
           sleep 10
 
-          # First publish zvec-sys (no dependencies)
-          cd zvec-sys
-          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          # First publish zvec-rust-sys (no dependencies)
+          cargo publish -p zvec-rust-sys --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
 
-          # Wait for crates.io to index zvec-sys
+          # Wait for crates.io to index zvec-rust-sys
           sleep 30
 
-          # Then publish zvec (depends on zvec-sys)
-          cd ../zvec
-          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+          # Then publish zvec-rust (depends on zvec-rust-sys)
+          cargo publish -p zvec-rust --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
         continue-on-error: true
         shell: bash

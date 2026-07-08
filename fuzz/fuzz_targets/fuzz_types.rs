@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use zvec::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};
+use zvec_rust::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};
 
 #[derive(arbitrary::Arbitrary, Debug)]
 struct FuzzInput {
