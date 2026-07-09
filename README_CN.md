@@ -169,6 +169,9 @@ fn main() -> zvec_rust::Result<()> {
 | `config_logging` | 库配置：内存限制、线程数、日志 |
 
 ```bash
+# 直接使用 cargo（需要设置 ZVEC_LIB_DIR / DYLD_LIBRARY_PATH）
+export DYLD_LIBRARY_PATH=vendor/zvec/build/lib
+
 cargo run --example basic
 cargo run --example vector_search
 ```

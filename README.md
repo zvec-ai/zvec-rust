@@ -169,6 +169,9 @@ Run any example with `cargo run --example <name>`:
 | `config_logging` | Library configuration: memory limits, thread counts, logging |
 
 ```bash
+# Using cargo directly (requires ZVEC_LIB_DIR / DYLD_LIBRARY_PATH)
+export DYLD_LIBRARY_PATH=vendor/zvec/build/lib
+
 cargo run --example basic
 cargo run --example vector_search
 ```
