@@ -306,6 +306,7 @@ mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
 | HNSW+量化 | `IndexParams::hnsw_with_quantize(...)` | 带量化的 HNSW |
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | 倒排文件索引 |
 | Flat | `IndexParams::flat(metric)` | 暴力搜索索引 |
+| Vamana (DiskANN) | `IndexParams::vamana(metric, max_degree, search_list, alpha, saturate, contiguous)` | 磁盘图索引，适合大规模数据 |
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 

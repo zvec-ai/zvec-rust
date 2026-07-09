@@ -116,6 +116,13 @@ pub struct zvec_flat_query_params_t {
     _private: [u8; 0],
 }
 
+/// Opaque pointer to Vamana (DiskANN) index query parameters.
+/// Configures ef_search, radius, and refiner settings for Vamana searches.
+#[repr(C)]
+pub struct zvec_vamana_query_params_t {
+    _private: [u8; 0],
+}
+
 /// Opaque pointer to FTS query parameters.
 /// Controls the default boolean operator for adjacent bare terms.
 #[repr(C)]
@@ -267,6 +274,8 @@ pub const ZVEC_INDEX_TYPE_HNSW: zvec_index_type_t = 1;
 pub const ZVEC_INDEX_TYPE_IVF: zvec_index_type_t = 2;
 /// Flat/brute-force index (exact search).
 pub const ZVEC_INDEX_TYPE_FLAT: zvec_index_type_t = 3;
+/// Vamana (DiskANN) disk-based graph index.
+pub const ZVEC_INDEX_TYPE_VAMANA: zvec_index_type_t = 6;
 /// Inverted index for scalar field filtering.
 pub const ZVEC_INDEX_TYPE_INVERT: zvec_index_type_t = 10;
 /// Full-text search index.
@@ -604,6 +613,22 @@ extern "C" {
         out_n_list: *mut c_int,
         out_n_iters: *mut c_int,
         out_use_soar: *mut bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_set_vamana_params(
+        params: *mut zvec_index_params_t,
+        max_degree: c_int,
+        search_list_size: c_int,
+        alpha: f32,
+        saturate_graph: bool,
+        use_contiguous_memory: bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_get_vamana_params(
+        params: *const zvec_index_params_t,
+        out_max_degree: *mut c_int,
+        out_search_list_size: *mut c_int,
+        out_alpha: *mut f32,
+        out_saturate_graph: *mut bool,
+        out_use_contiguous_memory: *mut bool,
     ) -> zvec_error_code_t;
     pub fn zvec_index_params_set_invert_params(
         params: *mut zvec_index_params_t,
@@ -1089,6 +1114,44 @@ extern "C" {
     ) -> bool;
 
     // -------------------------------------------------------------------------
+    // Vamana Query Parameters
+    // Functions for creating and configuring Vamana (DiskANN) query parameters.
+    // -------------------------------------------------------------------------
+    pub fn zvec_query_params_vamana_create(
+        ef_search: c_int,
+        radius: f32,
+        is_linear: bool,
+        is_using_refiner: bool,
+    ) -> *mut zvec_vamana_query_params_t;
+    pub fn zvec_query_params_vamana_destroy(params: *mut zvec_vamana_query_params_t);
+    pub fn zvec_query_params_vamana_set_ef_search(
+        params: *mut zvec_vamana_query_params_t,
+        ef_search: c_int,
+    ) -> zvec_error_code_t;
+    pub fn zvec_query_params_vamana_get_ef_search(
+        params: *const zvec_vamana_query_params_t,
+    ) -> c_int;
+    pub fn zvec_query_params_vamana_set_radius(
+        params: *mut zvec_vamana_query_params_t,
+        radius: f32,
+    ) -> zvec_error_code_t;
+    pub fn zvec_query_params_vamana_get_radius(params: *const zvec_vamana_query_params_t) -> f32;
+    pub fn zvec_query_params_vamana_set_is_linear(
+        params: *mut zvec_vamana_query_params_t,
+        is_linear: bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_query_params_vamana_get_is_linear(
+        params: *const zvec_vamana_query_params_t,
+    ) -> bool;
+    pub fn zvec_query_params_vamana_set_is_using_refiner(
+        params: *mut zvec_vamana_query_params_t,
+        is_using_refiner: bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_query_params_vamana_get_is_using_refiner(
+        params: *const zvec_vamana_query_params_t,
+    ) -> bool;
+
+    // -------------------------------------------------------------------------
     // FTS Query Parameters
     // Functions for creating and configuring FTS query parameters.
     // -------------------------------------------------------------------------
@@ -1183,6 +1246,10 @@ extern "C" {
         query: *mut zvec_vector_query_t,
         flat_params: *mut zvec_flat_query_params_t,
     ) -> zvec_error_code_t;
+    pub fn zvec_vector_query_set_vamana_params(
+        query: *mut zvec_vector_query_t,
+        vamana_params: *mut zvec_vamana_query_params_t,
+    ) -> zvec_error_code_t;
     pub fn zvec_vector_query_set_fts_params(
         query: *mut zvec_vector_query_t,
         fts_params: *mut zvec_fts_query_params_t,
@@ -1271,6 +1338,10 @@ extern "C" {
     pub fn zvec_group_by_vector_query_set_flat_params(
         query: *mut zvec_group_by_vector_query_t,
         flat_params: *mut zvec_flat_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_group_by_vector_query_set_vamana_params(
+        query: *mut zvec_group_by_vector_query_t,
+        vamana_params: *mut zvec_vamana_query_params_t,
     ) -> zvec_error_code_t;
 
     // -------------------------------------------------------------------------
@@ -1364,6 +1435,10 @@ extern "C" {
     pub fn zvec_sub_query_set_flat_params(
         query: *mut zvec_sub_query_t,
         flat_params: *mut zvec_flat_query_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_sub_query_set_vamana_params(
+        query: *mut zvec_sub_query_t,
+        vamana_params: *mut zvec_vamana_query_params_t,
     ) -> zvec_error_code_t;
     pub fn zvec_sub_query_set_fts_params(
         query: *mut zvec_sub_query_t,

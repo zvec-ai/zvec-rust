@@ -125,6 +125,8 @@ pub enum IndexType {
     Ivf = 2,
     /// Flat (brute-force) index — exact search, no approximation.
     Flat = 3,
+    /// Vamana (DiskANN) disk-based graph index for large datasets.
+    Vamana = 6,
     /// Inverted index for scalar field filtering.
     Invert = 10,
     /// Full-text search index.
@@ -137,6 +139,7 @@ impl From<u32> for IndexType {
             1 => IndexType::Hnsw,
             2 => IndexType::Ivf,
             3 => IndexType::Flat,
+            6 => IndexType::Vamana,
             10 => IndexType::Invert,
             11 => IndexType::Fts,
             _ => IndexType::Undefined,
@@ -434,6 +437,7 @@ mod tests {
         assert_eq!(IndexType::from(1), IndexType::Hnsw);
         assert_eq!(IndexType::from(2), IndexType::Ivf);
         assert_eq!(IndexType::from(3), IndexType::Flat);
+        assert_eq!(IndexType::from(6), IndexType::Vamana);
         assert_eq!(IndexType::from(10), IndexType::Invert);
     }
 
@@ -450,6 +454,7 @@ mod tests {
             IndexType::Hnsw,
             IndexType::Ivf,
             IndexType::Flat,
+            IndexType::Vamana,
             IndexType::Invert,
         ];
         for it in all {
