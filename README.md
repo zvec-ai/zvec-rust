@@ -306,7 +306,7 @@ Available distance metrics: `L2`, `Ip`, `Cosine`, `MipsL2`.
 | HNSW+Q | `IndexParams::hnsw_with_quantize(...)` | HNSW with quantization |
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | Inverted file index |
 | Flat | `IndexParams::flat(metric)` | Brute-force index |
-| Vamana (DiskANN) | `IndexParams::vamana(metric, max_degree, search_list, alpha, saturate, contiguous)` | Disk-based graph index for large datasets |
+| Vamana | `IndexParams::vamana(metric, max_degree, search_list, alpha, saturate, contiguous)` | Vamana-based graph index, using a single contiguous memory arena to improve cache locality |
 | Invert | `IndexParams::invert(range, wildcard)` | Scalar field index |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | Full-text search index |
 

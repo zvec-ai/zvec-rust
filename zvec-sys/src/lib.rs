@@ -116,7 +116,7 @@ pub struct zvec_flat_query_params_t {
     _private: [u8; 0],
 }
 
-/// Opaque pointer to Vamana (DiskANN) index query parameters.
+/// Opaque pointer to Vamana index query parameters.
 /// Configures ef_search, radius, and refiner settings for Vamana searches.
 #[repr(C)]
 pub struct zvec_vamana_query_params_t {
@@ -274,7 +274,7 @@ pub const ZVEC_INDEX_TYPE_HNSW: zvec_index_type_t = 1;
 pub const ZVEC_INDEX_TYPE_IVF: zvec_index_type_t = 2;
 /// Flat/brute-force index (exact search).
 pub const ZVEC_INDEX_TYPE_FLAT: zvec_index_type_t = 3;
-/// Vamana (DiskANN) disk-based graph index.
+/// Vamana disk-based graph index.
 pub const ZVEC_INDEX_TYPE_VAMANA: zvec_index_type_t = 6;
 /// Inverted index for scalar field filtering.
 pub const ZVEC_INDEX_TYPE_INVERT: zvec_index_type_t = 10;
@@ -1115,7 +1115,7 @@ extern "C" {
 
     // -------------------------------------------------------------------------
     // Vamana Query Parameters
-    // Functions for creating and configuring Vamana (DiskANN) query parameters.
+    // Functions for creating and configuring Vamana query parameters.
     // -------------------------------------------------------------------------
     pub fn zvec_query_params_vamana_create(
         ef_search: c_int,

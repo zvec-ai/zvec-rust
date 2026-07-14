@@ -125,7 +125,7 @@ pub enum IndexType {
     Ivf = 2,
     /// Flat (brute-force) index — exact search, no approximation.
     Flat = 3,
-    /// Vamana (DiskANN) disk-based graph index for large datasets.
+    /// Vamana disk-based graph index for large datasets.
     Vamana = 6,
     /// Inverted index for scalar field filtering.
     Invert = 10,

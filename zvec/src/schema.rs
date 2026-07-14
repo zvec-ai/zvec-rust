@@ -124,7 +124,7 @@ impl IndexParams {
         }
     }
 
-    /// Creates Vamana (DiskANN) index parameters.
+    /// Creates Vamana index parameters.
     ///
     /// Vamana is a disk-based graph index that keeps the bulk of the index on
     /// disk, drastically reducing memory usage for large datasets.

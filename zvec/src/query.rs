@@ -90,7 +90,7 @@ impl Drop for FlatQueryParams {
     }
 }
 
-/// Vamana (DiskANN)-specific query parameters.
+/// Vamana-specific query parameters.
 pub struct VamanaQueryParams {
     pub(crate) handle: *mut zvec_rust_sys::zvec_vamana_query_params_t,
 }
