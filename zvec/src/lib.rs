@@ -54,7 +54,7 @@ pub use error::{Error, ErrorCode, Result};
 pub use multi_query::{MultiQuery, SubQuery};
 pub use query::{
     FlatQueryParams, Fts, FtsQueryParams, GroupBySearchQuery, HnswQueryParams, IvfQueryParams,
-    SearchQuery, SearchQueryBuilder,
+    SearchQuery, SearchQueryBuilder, VamanaQueryParams,
 };
 pub use schema::{CollectionSchema, FieldSchema, IndexParams};
 pub use types::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};

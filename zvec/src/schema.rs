@@ -124,6 +124,51 @@ impl IndexParams {
         }
     }
 
+    /// Creates Vamana index parameters.
+    ///
+    /// Vamana is a disk-based graph index that keeps the bulk of the index on
+    /// disk, drastically reducing memory usage for large datasets.
+    ///
+    /// - `max_degree`: maximum out-degree of the graph (typical: 64)
+    /// - `search_list_size`: construction-time candidate list size (typical: 100)
+    /// - `alpha`: pruning parameter controlling graph density (typical: 1.2)
+    /// - `saturate_graph`: whether to saturate the graph during construction
+    /// - `use_contiguous_memory`: whether to serve the index from contiguous memory
+    pub fn vamana(
+        metric: MetricType,
+        max_degree: i32,
+        search_list_size: i32,
+        alpha: f32,
+        saturate_graph: bool,
+        use_contiguous_memory: bool,
+    ) -> Result<Self> {
+        unsafe {
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Vamana as u32);
+            if handle.is_null() {
+                return Err(Error {
+                    code: ErrorCode::InternalError,
+                    message: "failed to create Vamana index params".into(),
+                });
+            }
+            check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
+                handle,
+                metric as u32,
+            ))?;
+            check_error(zvec_rust_sys::zvec_index_params_set_vamana_params(
+                handle,
+                max_degree,
+                search_list_size,
+                alpha,
+                saturate_graph,
+                use_contiguous_memory,
+            ))?;
+            Ok(IndexParams {
+                handle,
+                owned: true,
+            })
+        }
+    }
+
     /// Creates inverted index parameters for scalar fields.
     pub fn invert(enable_range_opt: bool, enable_wildcard: bool) -> Result<Self> {
         unsafe {
@@ -674,6 +719,13 @@ mod tests {
         let params = IndexParams::flat(MetricType::Cosine).unwrap();
         assert_eq!(params.index_type(), IndexType::Flat);
         assert_eq!(params.metric_type(), MetricType::Cosine);
+    }
+
+    #[test]
+    fn test_index_params_vamana() {
+        let params = IndexParams::vamana(MetricType::L2, 32, 100, 1.2, false, true).unwrap();
+        assert_eq!(params.index_type(), IndexType::Vamana);
+        assert_eq!(params.metric_type(), MetricType::L2);
     }
 
     #[test]

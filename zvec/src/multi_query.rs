@@ -6,8 +6,10 @@
 use std::os::raw::c_void;
 
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
-use crate::query::{FlatQueryParams, FtsQueryParams, HnswQueryParams, IvfQueryParams};
 use crate::query::Fts;
+use crate::query::{
+    FlatQueryParams, FtsQueryParams, HnswQueryParams, IvfQueryParams, VamanaQueryParams,
+};
 
 /// A multi-query operation combining multiple [`SubQuery`] objects.
 ///
@@ -275,6 +277,15 @@ impl SubQuery {
         Ok(())
     }
 
+    /// Sets Vamana query parameters (takes ownership on success).
+    pub fn set_vamana_params(&mut self, mut params: VamanaQueryParams) -> Result<()> {
+        check_error(unsafe {
+            zvec_rust_sys::zvec_sub_query_set_vamana_params(self.handle, params.handle)
+        })?;
+        params.handle = std::ptr::null_mut();
+        Ok(())
+    }
+
     /// Sets FTS query parameters (takes ownership on success).
     pub fn set_fts_params(&mut self, mut params: FtsQueryParams) -> Result<()> {
         check_error(unsafe {
@@ -350,7 +361,8 @@ mod tests {
         sub.set_field_name("content").expect("set field name");
 
         let mut fts = Fts::new().expect("create fts payload");
-        fts.set_match_string("hello world").expect("set match string");
+        fts.set_match_string("hello world")
+            .expect("set match string");
 
         sub.set_fts(&fts).expect("set fts payload");
     }
@@ -362,5 +374,16 @@ mod tests {
 
         let params = FtsQueryParams::new(Some("AND")).expect("create fts params");
         sub.set_fts_params(params).expect("set fts params");
+    }
+
+    #[test]
+    fn sub_query_set_vamana_params() {
+        let mut sub = SubQuery::new().expect("create sub-query");
+        sub.set_field_name("embedding").expect("set field name");
+        sub.set_query_vector(&[0.1, 0.2, 0.3, 0.4])
+            .expect("set query vector");
+
+        let params = VamanaQueryParams::new(200, 0.0, false, false);
+        sub.set_vamana_params(params).expect("set vamana params");
     }
 }
