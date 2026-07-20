@@ -90,42 +90,37 @@ impl Drop for FlatQueryParams {
     }
 }
 
-/// Vamana-specific query parameters.
-pub struct VamanaQueryParams {
-    pub(crate) handle: *mut zvec_rust_sys::zvec_vamana_query_params_t,
+/// DiskANN-specific query parameters.
+pub struct DiskannQueryParams {
+    pub(crate) handle: *mut zvec_rust_sys::zvec_diskann_query_params_t,
 }
 
-impl VamanaQueryParams {
-    /// Creates new Vamana query parameters.
-    pub fn new(ef_search: i32, radius: f32, is_linear: bool, is_using_refiner: bool) -> Self {
-        let handle = unsafe {
-            zvec_rust_sys::zvec_query_params_vamana_create(
-                ef_search,
-                radius,
-                is_linear,
-                is_using_refiner,
-            )
-        };
-        VamanaQueryParams { handle }
+impl DiskannQueryParams {
+    /// Creates new DiskANN query parameters.
+    ///
+    /// - `list_size`: search frontier size (default in the C library: 300)
+    pub fn new(list_size: i32) -> Self {
+        let handle = unsafe { zvec_rust_sys::zvec_query_params_diskann_create(list_size) };
+        DiskannQueryParams { handle }
     }
 
-    /// Sets the search-time candidate list size.
-    pub fn set_ef_search(&mut self, ef_search: i32) -> Result<()> {
+    /// Sets the search-time frontier size.
+    pub fn set_list_size(&mut self, list_size: i32) -> Result<()> {
         check_error(unsafe {
-            zvec_rust_sys::zvec_query_params_vamana_set_ef_search(self.handle, ef_search)
+            zvec_rust_sys::zvec_query_params_diskann_set_list_size(self.handle, list_size)
         })
     }
 
-    /// Returns the search-time candidate list size.
-    pub fn ef_search(&self) -> i32 {
-        unsafe { zvec_rust_sys::zvec_query_params_vamana_get_ef_search(self.handle) }
+    /// Returns the search-time frontier size.
+    pub fn list_size(&self) -> i32 {
+        unsafe { zvec_rust_sys::zvec_query_params_diskann_get_list_size(self.handle) }
     }
 }
 
-impl Drop for VamanaQueryParams {
+impl Drop for DiskannQueryParams {
     fn drop(&mut self) {
         if !self.handle.is_null() {
-            unsafe { zvec_rust_sys::zvec_query_params_vamana_destroy(self.handle) };
+            unsafe { zvec_rust_sys::zvec_query_params_diskann_destroy(self.handle) };
         }
     }
 }
@@ -401,10 +396,10 @@ impl SearchQuery {
         Ok(())
     }
 
-    /// Sets Vamana query parameters (takes ownership on success).
-    pub fn set_vamana_params(&mut self, mut params: VamanaQueryParams) -> Result<()> {
+    /// Sets DiskANN query parameters (takes ownership on success).
+    pub fn set_diskann_params(&mut self, mut params: DiskannQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_rust_sys::zvec_vector_query_set_vamana_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_vector_query_set_diskann_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -668,10 +663,10 @@ impl GroupBySearchQuery {
         Ok(())
     }
 
-    /// Sets Vamana query parameters (takes ownership on success).
-    pub fn set_vamana_params(&mut self, mut params: VamanaQueryParams) -> Result<()> {
+    /// Sets DiskANN query parameters (takes ownership on success).
+    pub fn set_diskann_params(&mut self, mut params: DiskannQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_rust_sys::zvec_group_by_vector_query_set_vamana_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_group_by_vector_query_set_diskann_params(self.handle, params.handle)
         })?;
         // Ownership transferred to query only on success; prevent double-free
         params.handle = std::ptr::null_mut();
@@ -840,10 +835,10 @@ mod tests {
     }
 
     #[test]
-    fn test_vamana_query_params_create_and_getters() {
-        let mut params = VamanaQueryParams::new(200, 0.0, false, false);
-        assert_eq!(params.ef_search(), 200);
-        params.set_ef_search(300).expect("set ef_search");
-        assert_eq!(params.ef_search(), 300);
+    fn test_diskann_query_params_create_and_getters() {
+        let mut params = DiskannQueryParams::new(200);
+        assert_eq!(params.list_size(), 200);
+        params.set_list_size(300).expect("set list_size");
+        assert_eq!(params.list_size(), 300);
     }
 }

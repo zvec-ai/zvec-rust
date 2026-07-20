@@ -11,7 +11,7 @@ keywords = ["vector-database", "zvec", "similarity-search", "embeddings", "hnsw"
 categories = ["database", "api-bindings"]
 
 [dependencies]
-zvec-rust-sys = { path = "../zvec-sys", version = "0.5.1" }
+zvec-rust-sys = { path = "../zvec-sys", version = "0.6.0" }
 
 [features]
 default = ["bundled"]

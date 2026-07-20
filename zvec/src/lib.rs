@@ -53,8 +53,8 @@ pub use doc::Doc;
 pub use error::{Error, ErrorCode, Result};
 pub use multi_query::{MultiQuery, SubQuery};
 pub use query::{
-    FlatQueryParams, Fts, FtsQueryParams, GroupBySearchQuery, HnswQueryParams, IvfQueryParams,
-    SearchQuery, SearchQueryBuilder, VamanaQueryParams,
+    DiskannQueryParams, FlatQueryParams, Fts, FtsQueryParams, GroupBySearchQuery, HnswQueryParams,
+    IvfQueryParams, SearchQuery, SearchQueryBuilder,
 };
 pub use schema::{CollectionSchema, FieldSchema, IndexParams};
 pub use types::{DataType, DocOperator, IndexType, LogLevel, MetricType, QuantizeType};

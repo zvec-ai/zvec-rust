@@ -8,7 +8,7 @@ use std::os::raw::c_void;
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
 use crate::query::Fts;
 use crate::query::{
-    FlatQueryParams, FtsQueryParams, HnswQueryParams, IvfQueryParams, VamanaQueryParams,
+    DiskannQueryParams, FlatQueryParams, FtsQueryParams, HnswQueryParams, IvfQueryParams,
 };
 
 /// A multi-query operation combining multiple [`SubQuery`] objects.
@@ -277,10 +277,10 @@ impl SubQuery {
         Ok(())
     }
 
-    /// Sets Vamana query parameters (takes ownership on success).
-    pub fn set_vamana_params(&mut self, mut params: VamanaQueryParams) -> Result<()> {
+    /// Sets DiskANN query parameters (takes ownership on success).
+    pub fn set_diskann_params(&mut self, mut params: DiskannQueryParams) -> Result<()> {
         check_error(unsafe {
-            zvec_rust_sys::zvec_sub_query_set_vamana_params(self.handle, params.handle)
+            zvec_rust_sys::zvec_sub_query_set_diskann_params(self.handle, params.handle)
         })?;
         params.handle = std::ptr::null_mut();
         Ok(())
@@ -377,13 +377,13 @@ mod tests {
     }
 
     #[test]
-    fn sub_query_set_vamana_params() {
+    fn sub_query_set_diskann_params() {
         let mut sub = SubQuery::new().expect("create sub-query");
         sub.set_field_name("embedding").expect("set field name");
         sub.set_query_vector(&[0.1, 0.2, 0.3, 0.4])
             .expect("set query vector");
 
-        let params = VamanaQueryParams::new(200, 0.0, false, false);
-        sub.set_vamana_params(params).expect("set vamana params");
+        let params = DiskannQueryParams::new(200);
+        sub.set_diskann_params(params).expect("set diskann params");
     }
 }

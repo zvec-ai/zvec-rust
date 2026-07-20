@@ -124,43 +124,37 @@ impl IndexParams {
         }
     }
 
-    /// Creates Vamana index parameters.
+    /// Creates DiskANN index parameters.
     ///
-    /// Vamana is a disk-based graph index that keeps the bulk of the index on
+    /// DiskANN is a disk-based graph index that keeps the bulk of the index on
     /// disk, drastically reducing memory usage for large datasets.
     ///
-    /// - `max_degree`: maximum out-degree of the graph (typical: 64)
-    /// - `search_list_size`: construction-time candidate list size (typical: 100)
-    /// - `alpha`: pruning parameter controlling graph density (typical: 1.2)
-    /// - `saturate_graph`: whether to saturate the graph during construction
-    /// - `use_contiguous_memory`: whether to serve the index from contiguous memory
-    pub fn vamana(
+    /// - `max_degree`: graph connectivity, i.e. max out-degree of the graph (typical: 64)
+    /// - `list_size`: build-time candidate list size during construction (typical: 100)
+    /// - `pq_chunk_num`: PQ chunk count; `0` disables product quantization
+    pub fn diskann(
         metric: MetricType,
         max_degree: i32,
-        search_list_size: i32,
-        alpha: f32,
-        saturate_graph: bool,
-        use_contiguous_memory: bool,
+        list_size: i32,
+        pq_chunk_num: i32,
     ) -> Result<Self> {
         unsafe {
-            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Vamana as u32);
+            let handle = zvec_rust_sys::zvec_index_params_create(IndexType::Diskann as u32);
             if handle.is_null() {
                 return Err(Error {
                     code: ErrorCode::InternalError,
-                    message: "failed to create Vamana index params".into(),
+                    message: "failed to create DiskANN index params".into(),
                 });
             }
             check_error(zvec_rust_sys::zvec_index_params_set_metric_type(
                 handle,
                 metric as u32,
             ))?;
-            check_error(zvec_rust_sys::zvec_index_params_set_vamana_params(
+            check_error(zvec_rust_sys::zvec_index_params_set_diskann_params(
                 handle,
                 max_degree,
-                search_list_size,
-                alpha,
-                saturate_graph,
-                use_contiguous_memory,
+                list_size,
+                pq_chunk_num,
             ))?;
             Ok(IndexParams {
                 handle,
@@ -722,9 +716,9 @@ mod tests {
     }
 
     #[test]
-    fn test_index_params_vamana() {
-        let params = IndexParams::vamana(MetricType::L2, 32, 100, 1.2, false, true).unwrap();
-        assert_eq!(params.index_type(), IndexType::Vamana);
+    fn test_index_params_diskann() {
+        let params = IndexParams::diskann(MetricType::L2, 32, 100, 0).unwrap();
+        assert_eq!(params.index_type(), IndexType::Diskann);
         assert_eq!(params.metric_type(), MetricType::L2);
     }
 

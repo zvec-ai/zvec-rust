@@ -1129,38 +1129,46 @@ fn test_collection_multi_query_fts_vector_hybrid() {
 }
 
 // =============================================================================
-// Vamana Index Tests
+// DiskANN Index Tests
 // =============================================================================
 
 #[test]
-fn test_index_params_vamana() {
+fn test_index_params_diskann() {
     ensure_initialized();
 
-    let params = IndexParams::vamana(MetricType::L2, 32, 100, 1.2, false, true).unwrap();
-    assert_eq!(params.index_type(), IndexType::Vamana);
+    let params = IndexParams::diskann(MetricType::L2, 32, 100, 0).unwrap();
+    assert_eq!(params.index_type(), IndexType::Diskann);
     assert_eq!(params.metric_type(), MetricType::L2);
 }
 
 #[test]
-fn test_vamana_collection_end_to_end() {
+fn test_diskann_collection_end_to_end() {
     ensure_initialized();
 
     let tmp_dir = tempfile::tempdir().unwrap();
-    let dir = tmp_dir.path().join("zvec_vamana_data");
+    let dir = tmp_dir.path().join("zvec_diskann_data");
 
-    let schema = CollectionSchema::builder("vamana_collection")
+    let schema = CollectionSchema::builder("diskann_collection")
         .add_field(FieldSchema::new("id", DataType::String, false, 0).unwrap())
         .add_vector_field(
             "embedding",
             DataType::VectorFp32,
             4,
-            IndexParams::vamana(MetricType::L2, 32, 100, 1.2, false, true).unwrap(),
+            IndexParams::diskann(MetricType::L2, 32, 100, 0).unwrap(),
         )
         .build()
-        .expect("failed to build vamana schema");
+        .expect("failed to build diskann schema");
 
-    let collection = Collection::create_and_open(dir.to_str().unwrap(), &schema, None)
-        .expect("failed to create collection with vamana index");
+    let collection = match Collection::create_and_open(dir.to_str().unwrap(), &schema, None) {
+        Ok(c) => c,
+        // DiskANN is only supported on Linux x86_64. On other platforms the
+        // engine reports NotSupported; skip the end-to-end flow gracefully.
+        Err(e) if e.code == ErrorCode::NotSupported => {
+            eprintln!("skipping diskann end-to-end test: {}", e.message);
+            return;
+        }
+        Err(e) => panic!("failed to create collection with diskann index: {:?}", e),
+    };
 
     let mut docs = Vec::new();
     for i in 0..50 {
@@ -1178,25 +1186,25 @@ fn test_vamana_collection_end_to_end() {
     assert_eq!(result.success_count, 50);
     assert_eq!(result.error_count, 0);
 
-    // Build the vamana index over the flushed segments
+    // Build the diskann index over the flushed segments
     collection.flush().expect("flush failed");
     collection.optimize().expect("optimize failed");
 
-    // Plain query against the vamana-indexed field
+    // Plain query against the diskann-indexed field
     let query = SearchQuery::new("embedding", &[10.0, 11.0, 12.0, 13.0], 5).unwrap();
-    let results = collection.query(&query).expect("vamana query failed");
+    let results = collection.query(&query).expect("diskann query failed");
     assert!(!results.is_empty());
     assert!(results.len() <= 5);
     assert_eq!(results[0].get_pk(), Some("pk_10"));
 
-    // Query with explicit Vamana query parameters
+    // Query with explicit DiskANN query parameters
     let mut query = SearchQuery::new("embedding", &[10.0, 11.0, 12.0, 13.0], 5).unwrap();
     query
-        .set_vamana_params(VamanaQueryParams::new(200, 0.0, false, false))
-        .expect("set vamana params failed");
+        .set_diskann_params(DiskannQueryParams::new(200))
+        .expect("set diskann params failed");
     let results = collection
         .query(&query)
-        .expect("vamana query with params failed");
+        .expect("diskann query with params failed");
     assert!(!results.is_empty());
     assert_eq!(results[0].get_pk(), Some("pk_10"));
 }

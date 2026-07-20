@@ -51,7 +51,7 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ```toml
 [dependencies]
-zvec-rust = "0.5.1"
+zvec-rust = "0.6.0"
 ```
 
 ### 方案二：自行编译
@@ -309,7 +309,7 @@ mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
 | HNSW+量化 | `IndexParams::hnsw_with_quantize(...)` | 带量化的 HNSW |
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | 倒排文件索引 |
 | Flat | `IndexParams::flat(metric)` | 暴力搜索索引 |
-| Vamana | `IndexParams::vamana(metric, max_degree, search_list, alpha, saturate, contiguous)` | 基于 Vamana 图算法索引，使用单块连续内存 arena 提升缓存局部性 |
+| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | 基于磁盘的图索引，适合大规模数据集（仅支持 Linux x86_64） |
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 
