@@ -2,19 +2,7 @@ name: Build Prebuilt Libraries
 
 on:
   workflow_dispatch:
-    inputs:
-      zvec_ref:
-        description: 'zvec git ref to build (branch, tag, or commit)'
-        required: false
-        default: 'main'
-        type: string
   workflow_call:
-    inputs:
-      zvec_ref:
-        description: 'zvec git ref to build'
-        required: false
-        default: 'main'
-        type: string
     outputs:
       artifact_prefix:
         description: 'Prefix used for uploaded artifacts'
@@ -43,34 +31,33 @@ jobs:
             os: ubuntu-24.04-arm
             lib_name: libzvec_c_api.so
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025
             lib_name: zvec_c_api.dll
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     env:
       SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       - name: Setup sccache
+        # Not on Windows: bundled Arrow's CMake auto-detects sccache on PATH and
+        # wraps lib.exe/link.exe, stalling on the huge tail libs (see ci.yml).
+        if: runner.os != 'Windows'
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Clone zvec
-        run: |
-          git clone --depth 1 --branch ${{ inputs.zvec_ref || 'main' }} \
-            --recurse-submodules --shallow-submodules \
-            https://github.com/alibaba/zvec.git ../zvec
-        shell: bash
-
       # Use manylinux_2_28 container for Linux x64 to ensure broad GLIBC compatibility
       - name: Build zvec C library (Linux x64 manylinux)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           docker run --rm \
-            -v "$PWD/../zvec:/zvec" \
+            -v "$PWD/vendor/zvec:/zvec" \
             -w /zvec \
             quay.io/pypa/manylinux_2_28_x86_64 \
             bash -c "
@@ -84,7 +71,7 @@ jobs:
       - name: Build zvec C library (Unix)
         if: runner.os != 'Windows' && matrix.target != 'x86_64-unknown-linux-gnu'
         run: |
-          cd ../zvec
+          cd vendor/zvec
 
           if [[ "${{ matrix.target }}" == *apple* ]]; then
             NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
@@ -108,33 +95,32 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Fix link.exe conflict with Git Bash
+      - name: Install CMake and Ninja (Windows)
+        # Pin the same versions ci.yml uses; cmake 3.30.0 (not 4.x) avoids the
+        # old cmake_minimum_required policy errors.
         if: runner.os == 'Windows'
-        run: |
-          if (Test-Path "C:\Program Files\Git\usr\bin\link.exe") {
-            Rename-Item "C:\Program Files\Git\usr\bin\link.exe" "link_git.exe"
-            Write-Host "Renamed Git link.exe to avoid MSVC linker conflict"
-          }
+        run: pip install cmake==3.30.0 ninja==1.11.1
         shell: pwsh
 
       - name: Build zvec C library (Windows)
         if: runner.os == 'Windows'
-        env:
-          MSYS_NO_PATHCONV: 1
-          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: |
-          cd ../zvec
-          python -m pip install ninja
-          mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
-          cmake --build . --config Release --parallel
-        shell: bash
+          cd vendor/zvec
+          mkdir build -ErrorAction SilentlyContinue
+          cd build
+          # Fully aligned with ci.yml / zvec-go's proven Windows build: minimal
+          # flags, pwsh, pinned cmake/ninja, no sccache. The previous
+          # BUILD_*_SHARED=OFF / CMAKE_MSVC_RUNTIME_LIBRARY overrides changed the
+          # tail link behaviour and stalled the build for hours.
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -G Ninja
+          cmake --build . --config Release --parallel --target zvec_c_api
+        shell: pwsh
 
       - name: Package library (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          ZVEC_LIB_DIR="$(find ../zvec/build -name '${{ matrix.lib_name }}' -exec dirname {} \; | head -1)"
+          ZVEC_LIB_DIR="$(find vendor/zvec/build -name '${{ matrix.lib_name }}' -exec dirname {} \; | head -1)"
           cp "$ZVEC_LIB_DIR/${{ matrix.lib_name }}" dist/
           # Also copy any symlinks or versioned libraries
           find "$ZVEC_LIB_DIR" -name 'libzvec_c_api*' -exec cp -P {} dist/ \; 2>/dev/null || true
@@ -148,10 +134,10 @@ jobs:
         run: |
           mkdir -p dist
           # Find the DLL and import lib
-          find ../zvec/build -name 'zvec_c_api.dll' -exec cp {} dist/ \; 2>/dev/null || true
-          find ../zvec/build -name 'zvec_c_api.lib' -exec cp {} dist/ \; 2>/dev/null || true
-          find ../zvec/build -name 'zvec_c_api.dll' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
-          find ../zvec/build -name 'zvec_c_api.lib' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
+          find vendor/zvec/build -name 'zvec_c_api.dll' -exec cp {} dist/ \; 2>/dev/null || true
+          find vendor/zvec/build -name 'zvec_c_api.lib' -exec cp {} dist/ \; 2>/dev/null || true
+          find vendor/zvec/build -name 'zvec_c_api.dll' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
+          find vendor/zvec/build -name 'zvec_c_api.lib' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
           echo "${{ matrix.target }}" > dist/TARGET
           tar czf zvec-prebuilt-${{ matrix.target }}.tar.gz -C dist .
           ls -lh zvec-prebuilt-${{ matrix.target }}.tar.gz

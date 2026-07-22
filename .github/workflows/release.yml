@@ -19,8 +19,6 @@ jobs:
   build-prebuilt:
     name: Build Prebuilt Libraries
     uses: ./.github/workflows/build-prebuilt.yml
-    with:
-      zvec_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
   # Step 2: Create release and upload prebuilt libraries
   release:

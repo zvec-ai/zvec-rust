@@ -1344,11 +1344,11 @@ extern "C" {
     pub fn zvec_group_by_vector_query_get_group_count(
         query: *const zvec_group_by_vector_query_t,
     ) -> u32;
-    pub fn zvec_group_by_vector_query_set_group_topk(
+    pub fn zvec_group_by_vector_query_set_topk_per_group(
         query: *mut zvec_group_by_vector_query_t,
         topk: u32,
     ) -> zvec_error_code_t;
-    pub fn zvec_group_by_vector_query_get_group_topk(
+    pub fn zvec_group_by_vector_query_get_topk_per_group(
         query: *const zvec_group_by_vector_query_t,
     ) -> u32;
     pub fn zvec_group_by_vector_query_set_query_vector(

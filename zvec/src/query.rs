@@ -596,7 +596,7 @@ impl GroupBySearchQuery {
             zvec_rust_sys::zvec_group_by_vector_query_set_group_count(handle, group_count)
         })?;
         check_error(unsafe {
-            zvec_rust_sys::zvec_group_by_vector_query_set_group_topk(handle, group_topk)
+            zvec_rust_sys::zvec_group_by_vector_query_set_topk_per_group(handle, group_topk)
         })?;
 
         Ok(GroupBySearchQuery { handle })

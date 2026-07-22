@@ -59,8 +59,9 @@ jobs:
           - platform: linux-arm64
             os: ubuntu-24.04-arm
           - platform: windows-x64
-            os: windows-latest
+            os: windows-2025
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
     env:
       SCCACHE_GHA_ENABLED: "true"
     steps:
@@ -69,6 +70,12 @@ jobs:
           submodules: recursive
 
       - name: Setup sccache
+        # Not on Windows: bundled Arrow's CMake auto-detects sccache on PATH and
+        # wraps even lib.exe/link.exe; on the huge tail libs (zvec.lib bundling
+        # Arrow) it stalls uploading to the GHA cache backend and hangs the build.
+        # zvec-go builds fine in ~47min precisely because it never installs
+        # sccache on Windows. sccache stays enabled for Unix/macOS.
+        if: runner.os != 'Windows'
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - uses: dtolnay/rust-toolchain@stable
@@ -93,11 +100,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libaio-dev
         shell: bash
 
-      - name: Clone and build zvec C library (Unix)
+      - name: Build zvec C library (Unix)
         if: runner.os != 'Windows'
         run: |
-          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
-          cd ../zvec
+          cd vendor/zvec
           mkdir -p build && cd build
 
           if [[ "${{ matrix.platform }}" == macos-* ]]; then
@@ -107,12 +113,24 @@ jobs:
           fi
 
           cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-          cmake --build . --config Release --parallel "$NPROC"
+          # Since zvec #602, DISKANN_SUPPORTED packs the DiskANN sources into
+          # zvec_core (which zvec_c_api whole-archives), so --target zvec_c_api
+          # already produces a complete, self-contained lib (DiskANN included on
+          # linux-x86_64). No transient patch needed.
+          cmake --build . --config Release --parallel "$NPROC" --target zvec_c_api
         shell: bash
 
       - name: Setup MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install CMake and Ninja (Windows)
+        # Pin the exact CMake/Ninja versions zvec-go uses. cmake 3.30.0 (not the
+        # runner's 4.x) avoids the old cmake_minimum_required policy errors, so
+        # no CMAKE_POLICY_VERSION_MINIMUM shims are needed.
+        if: runner.os == 'Windows'
+        run: pip install cmake==3.30.0 ninja==1.11.1
+        shell: pwsh
 
       - name: Fix link.exe conflict with Git Bash
         if: runner.os == 'Windows'
@@ -123,23 +141,23 @@ jobs:
           }
         shell: pwsh
 
-      - name: Clone and build zvec C library (Windows)
+      - name: Build zvec C library (Windows)
         if: runner.os == 'Windows'
         run: |
-          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/alibaba/zvec.git ../zvec
-          cd ../zvec
-          mkdir -p build && cd build
-          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_C_BINDINGS=ON -DBUILD_PYTHON_BINDINGS=OFF -DBUILD_TOOLS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_FLAGS=/MP -DCMAKE_CXX_FLAGS=/MP
-          cmake --build . --config Release --parallel
-        shell: bash
-        env:
-          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-          MSYS_NO_PATHCONV: 1
+          cd vendor/zvec
+          mkdir build -ErrorAction SilentlyContinue
+          cd build
+          # Fully aligned with zvec-go's proven-working Windows build: same
+          # runner (windows-2025), same pinned cmake/ninja, same minimal flags,
+          # same pwsh shell, same --target. No sccache on Windows.
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -G Ninja
+          cmake --build . --target zvec_c_api -j $env:NUMBER_OF_PROCESSORS
+        shell: pwsh
 
       - name: Set library path (Unix)
         if: runner.os != 'Windows'
         run: |
-          ZVEC_LIB_DIR="$(cd ../zvec/build/lib 2>/dev/null && pwd || echo '')"
+          ZVEC_LIB_DIR="$(cd vendor/zvec/build/lib 2>/dev/null && pwd || echo '')"
           echo "ZVEC_LIB_DIR=$ZVEC_LIB_DIR" >> $GITHUB_ENV
 
           if [[ "${{ matrix.platform }}" == macos-* ]]; then
@@ -154,11 +172,11 @@ jobs:
         run: |
           # Collect all .lib and .dll files so we can find the actual output location
           Write-Host "Searching for zvec_c_api library files..."
-          $found = Get-ChildItem -Path "../zvec/build" -Recurse -Include "zvec_c_api.lib","zvec_c_api.dll" -ErrorAction SilentlyContinue
+          $found = Get-ChildItem -Path "vendor/zvec/build" -Recurse -Include "zvec_c_api.lib","zvec_c_api.dll" -ErrorAction SilentlyContinue
           foreach ($f in $found) { Write-Host "  Found: $($f.FullName)" }
 
           # Create a canonical lib directory and copy all library files there
-          $canonicalDir = (Resolve-Path "../zvec/build").Path + "\lib"
+          $canonicalDir = (Resolve-Path "vendor/zvec/build").Path + "\lib"
           New-Item -ItemType Directory -Force -Path $canonicalDir | Out-Null
 
           foreach ($f in $found) {
@@ -175,7 +193,7 @@ jobs:
             echo "ZVEC_LIB_DIR=$canonicalDir" >> $env:GITHUB_ENV
             echo "$canonicalDir" >> $env:GITHUB_PATH
           } else {
-            Write-Host "::error::Could not find zvec_c_api.lib anywhere under ../zvec/build"
+            Write-Host "::error::Could not find zvec_c_api.lib anywhere under vendor/zvec/build"
             exit 1
           }
         shell: pwsh
