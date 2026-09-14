@@ -54,12 +54,38 @@ The Rust SDK depends on the zvec C library (`libzvec_c_api`). Choose one of the 
 
 ### Option 1: Bundled Prebuilt Library (Zero Setup)
 
-Add `zvec-rust` to your `Cargo.toml`. The default `bundled` feature automatically downloads the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) and sets up the library path via `rpath`:
+Add `zvec-rust` to your `Cargo.toml`. The default `bundled` feature automatically downloads the prebuilt `libzvec_c_api` for your platform from [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases):
 
 ```toml
 [dependencies]
 zvec-rust = "0.7.1"
 ```
+
+`cargo run` / `cargo test` work out of the box because Cargo passes the
+resolved library directory to the linker for you. A **directly executed** or
+**deployed** binary, however, needs a runtime search path (`rpath`) pointing at
+the shared library — Cargo does not add one automatically. Use the
+[`zvec-rust-build`](https://crates.io/crates/zvec-rust-build) build-script
+helper from your binary crate to emit the `rpath` and stage the library beside
+the executable:
+
+```toml
+[dependencies]
+zvec-rust = "0.7.1"
+
+[build-dependencies]
+zvec-rust-build = "0.7.1"
+```
+
+```rust
+// build.rs
+fn main() {
+    zvec_rust_build::configure();
+}
+```
+
+Without the helper you must instead set `DYLD_LIBRARY_PATH` (macOS) /
+`LD_LIBRARY_PATH` (Linux) at runtime.
 
 ### Option 2: Custom Build
 

@@ -1,0 +1,15 @@
+[package]
+name = "zvec-rpath-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Internal smoke binary: proves a downstream executable finds libzvec_c_api at runtime with no dylib search-path env vars, using the zvec-rust-build helper."
+
+[dependencies]
+zvec-rust = { path = "../zvec" }
+
+[build-dependencies]
+zvec-rust-build = { path = "../zvec-build" }

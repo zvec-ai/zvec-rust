@@ -914,6 +914,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
+name = "zvec-rpath-smoke"
+version = "0.7.1"
+dependencies = [
+ "zvec-rust",
+ "zvec-rust-build",
+]
+
+[[package]]
 name = "zvec-rust"
 version = "0.7.1"
 dependencies = [

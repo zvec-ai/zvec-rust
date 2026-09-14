@@ -1,5 +1,5 @@
 [workspace]
-members = ["zvec-sys", "zvec", "zvec-build"]
+members = ["zvec-sys", "zvec", "zvec-build", "zvec-rpath-smoke"]
 exclude = ["fuzz"]
 resolver = "2"
 

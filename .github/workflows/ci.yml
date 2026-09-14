@@ -218,6 +218,22 @@ jobs:
         run: cargo run --example basic
         shell: bash
 
+      - name: Downstream rpath smoke (self-contained binary)
+        # Build a downstream binary that wires zvec-rust-build from its build.rs,
+        # then execute it directly with every dylib search-path variable
+        # cleared. This fails unless the emitted rpath (@executable_path /
+        # $ORIGIN) plus the staged shared library make the executable
+        # self-contained — the case plain `cargo run` cannot prove, because
+        # Cargo injects the library directory into its own child's environment.
+        run: |
+          cargo build -p zvec-rpath-smoke
+          BIN="target/debug/zvec-rpath-smoke"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BIN="target/debug/zvec-rpath-smoke.exe"
+          fi
+          env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH -u LD_LIBRARY_PATH "$BIN"
+        shell: bash
+
   audit:
     name: Security Audit
     needs: check-and-test

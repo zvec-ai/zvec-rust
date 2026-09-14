@@ -38,15 +38,29 @@ jobs:
 
           SYS_VERSION=$(extract_version zvec-sys/Cargo.toml)
           SDK_VERSION=$(extract_version zvec/Cargo.toml)
+          BUILD_VERSION=$(extract_version zvec-build/Cargo.toml)
 
-          if [ "$SYS_VERSION" != "$VERSION" ] || [ "$SDK_VERSION" != "$VERSION" ]; then
+          if [ "$SYS_VERSION" != "$VERSION" ] || [ "$SDK_VERSION" != "$VERSION" ] || [ "$BUILD_VERSION" != "$VERSION" ]; then
             echo "Version mismatch!"
             echo "  Tag: $VERSION"
             echo "  zvec-rust-sys: $SYS_VERSION"
             echo "  zvec-rust: $SDK_VERSION"
+            echo "  zvec-rust-build: $BUILD_VERSION"
             exit 1
           fi
           echo "All versions match: $VERSION"
+        shell: bash
+
+      - name: Dry-run publish zvec-rust-build
+        # Pure build-script helper with no dependencies and no link to the C
+        # library, so it can be published first and independently.
+        run: cargo publish -p zvec-rust-build --dry-run
+        shell: bash
+
+      - name: Publish zvec-rust-build to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p zvec-rust-build
         shell: bash
 
       - name: Dry-run publish zvec-rust-sys

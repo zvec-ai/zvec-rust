@@ -54,12 +54,35 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ### 方案一： bundled 预编译库（零配置）
 
-在 `Cargo.toml` 中添加 `zvec-rust`。默认启用的 `bundled` feature 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`，并通过 `rpath` 设置库路径：
+在 `Cargo.toml` 中添加 `zvec-rust`。默认启用的 `bundled` feature 会自动从 [GitHub Releases](https://github.com/zvec-ai/zvec-rust/releases) 下载适合你平台的预编译 `libzvec_c_api`：
 
 ```toml
 [dependencies]
 zvec-rust = "0.7.1"
 ```
+
+`cargo run` / `cargo test` 可开箱即用，因为 Cargo 会把解析出的库目录传给链接器。
+但**直接执行**或**部署后**的二进制需要一条指向共享库的运行时搜索路径（`rpath`），
+而 Cargo 不会自动添加。请在你的二进制 crate 中使用
+[`zvec-rust-build`](https://crates.io/crates/zvec-rust-build) 构建脚本助手，
+它会生成 `rpath` 并把共享库暂存到可执行文件旁边：
+
+```toml
+[dependencies]
+zvec-rust = "0.7.1"
+
+[build-dependencies]
+zvec-rust-build = "0.7.1"
+```
+
+```rust
+// build.rs
+fn main() {
+    zvec_rust_build::configure();
+}
+```
+
+若不使用该助手，则需在运行时设置 `DYLD_LIBRARY_PATH`（macOS）/ `LD_LIBRARY_PATH`（Linux）。
 
 ### 方案二：自行编译
 
