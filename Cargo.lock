@@ -924,5 +924,9 @@ dependencies = [
 ]
 
 [[package]]
+name = "zvec-rust-build"
+version = "0.7.1"
+
+[[package]]
 name = "zvec-rust-sys"
 version = "0.7.1"

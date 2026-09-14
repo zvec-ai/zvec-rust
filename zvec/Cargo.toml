@@ -9,6 +9,7 @@ description = "Safe Rust bindings for the zvec vector database"
 readme = "../README.md"
 keywords = ["vector-database", "zvec", "similarity-search", "embeddings", "hnsw"]
 categories = ["database", "api-bindings"]
+links = "zvec_rust"
 
 [dependencies]
 zvec-rust-sys = { path = "../zvec-sys", version = "0.7.1" }

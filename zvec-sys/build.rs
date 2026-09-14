@@ -34,29 +34,24 @@ fn main() {
         resolve_include_dir(&sibling_zvec, &submodule_zvec, &vendor_dir, &auto_build_dir);
 
     if let Some(ref dir) = lib_dir {
+        let dir = dir.canonicalize().unwrap_or_else(|_| dir.clone());
         println!("cargo:rustc-link-search=native={}", dir.display());
         if dir.exists() {
             println!("cargo:rerun-if-changed={}", dir.display());
         }
+        // Publish the resolved library directory as `links` metadata. Cargo
+        // exposes it to *direct* dependents' build scripts as
+        // `DEP_ZVEC_C_API_LIB_DIR`. This is the only reliable way to make the
+        // path available further down the graph: a `cargo:rustc-link-arg`
+        // rpath emitted here would apply solely to this rlib's own targets and
+        // never reach a downstream executable. Downstream binaries must set
+        // their own rpath (see the `zvec-rust-build` helper crate).
+        println!("cargo:lib_dir={}", dir.display());
     }
     if let Some(ref dir) = include_dir {
         println!("cargo:include={}", dir.display());
         if dir.exists() {
             println!("cargo:rerun-if-changed={}", dir.display());
-        }
-    }
-
-    // Set rpath so the dynamic library can be found at runtime
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if let Some(ref dir) = lib_dir {
-        match target_os.as_str() {
-            "macos" => {
-                println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
-            }
-            "linux" => {
-                println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
-            }
-            _ => {}
         }
     }
 
@@ -180,9 +175,17 @@ fn has_zvec_lib(dir: &Path) -> bool {
     match target_os.as_str() {
         "macos" | "ios" => dir.join("libzvec_c_api.dylib").exists(),
         "windows" => {
-            // MSVC dynamic linking requires the .lib import library;
-            // the .dll alone is not enough for the linker.
-            dir.join("zvec_c_api.lib").exists() || dir.join("zvec_c_api.dll").exists()
+            // MSVC dynamic linking requires the .lib import library; the .dll
+            // alone is not enough for the linker. The GNU/MinGW toolchain can
+            // link directly against the .dll (or a .dll.a import lib).
+            let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+            if target_env == "msvc" {
+                dir.join("zvec_c_api.lib").exists()
+            } else {
+                dir.join("libzvec_c_api.dll.a").exists()
+                    || dir.join("zvec_c_api.lib").exists()
+                    || dir.join("zvec_c_api.dll").exists()
+            }
         }
         _ => dir.join("libzvec_c_api.so").exists(),
     }

@@ -1,0 +1,11 @@
+[package]
+name = "zvec-rust-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Build-script helper for downstream binaries linking against zvec-rust: emits the runtime rpath and stages the shared library."
+readme = "README.md"
+keywords = ["build-dependencies", "rpath", "zvec", "ffi", "bindings"]
+categories = ["development-tools::build-utils"]
