@@ -218,6 +218,8 @@ cargo run --example vector_search
 | `is_initialized()` | 检查初始化状态 |
 | `set_default_jieba_dict_dir(dir)` | 设置进程级默认 jieba 词表目录（供 FTS `jieba` 分词器使用） |
 | `get_default_jieba_dict_dir()` | 获取当前默认 jieba 词表目录（未设置时为 `""`） |
+| `io_backend_type()` / `io_backend_type_name(code)` | 当前 DiskAnn I/O 后端类型码及名称（`io_uring`、`libaio`、`pread`、`windows_overlapped`） |
+| `io_backend_description()` | 当前 I/O 后端的可读描述 |
 
 使用 [`ConfigBuilder`](zvec/src/config.rs) 自定义内存上限、线程数与日志：
 

@@ -422,6 +422,45 @@ pub fn version_patch() -> i32 {
     unsafe { zvec_rust_sys::zvec_get_version_patch() }
 }
 
+/// Returns the I/O backend type code used for DiskAnn disk reads.
+///
+/// Compare against the `ZVEC_IO_BACKEND_TYPE_*` constants in [`crate::sys`]:
+/// Linux selects io_uring, then libaio, then synchronous pread; macOS ARM64
+/// uses pread; Windows uses overlapped I/O. Use [`io_backend_type_name`] for
+/// the matching name.
+pub fn io_backend_type() -> u32 {
+    unsafe { zvec_rust_sys::zvec_get_io_backend_type() }
+}
+
+/// Returns the name of an I/O backend type code.
+///
+/// One of `"io_uring"`, `"libaio"`, `"pread"`, `"windows_overlapped"`, or
+/// `"unknown"` for an unrecognized code.
+pub fn io_backend_type_name(backend_type: u32) -> String {
+    unsafe {
+        let ptr = zvec_rust_sys::zvec_get_io_backend_type_name(backend_type);
+        if ptr.is_null() {
+            return String::new();
+        }
+        CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    }
+}
+
+/// Returns a human-readable description of the active I/O backend.
+///
+/// On Linux the pread description also explains why io_uring and libaio were
+/// unavailable. The returned string is a copy of a thread-local buffer owned
+/// by the zvec library.
+pub fn io_backend_description() -> String {
+    unsafe {
+        let ptr = zvec_rust_sys::zvec_get_io_backend_description();
+        if ptr.is_null() {
+            return String::new();
+        }
+        CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -563,5 +602,38 @@ mod tests {
                 dir_str
             );
         }
+    }
+
+    #[test]
+    fn io_backend_type_name_maps_every_code() {
+        use zvec_rust_sys::{
+            ZVEC_IO_BACKEND_TYPE_IO_URING, ZVEC_IO_BACKEND_TYPE_LIBAIO, ZVEC_IO_BACKEND_TYPE_PREAD,
+            ZVEC_IO_BACKEND_TYPE_WINDOWS_OVERLAPPED,
+        };
+
+        assert_eq!(io_backend_type_name(ZVEC_IO_BACKEND_TYPE_PREAD), "pread");
+        assert_eq!(io_backend_type_name(ZVEC_IO_BACKEND_TYPE_LIBAIO), "libaio");
+        assert_eq!(
+            io_backend_type_name(ZVEC_IO_BACKEND_TYPE_IO_URING),
+            "io_uring"
+        );
+        assert_eq!(
+            io_backend_type_name(ZVEC_IO_BACKEND_TYPE_WINDOWS_OVERLAPPED),
+            "windows_overlapped"
+        );
+        assert_eq!(io_backend_type_name(u32::MAX), "unknown");
+    }
+
+    #[test]
+    fn io_backend_introspection_reports_the_active_backend() {
+        let backend = io_backend_type();
+        let name = io_backend_type_name(backend);
+        assert!(
+            ["pread", "libaio", "io_uring", "windows_overlapped"].contains(&name.as_str()),
+            "unexpected io backend {} (code {})",
+            name,
+            backend
+        );
+        assert!(!io_backend_description().is_empty());
     }
 }

@@ -221,6 +221,8 @@ cargo run --example vector_search
 | `is_initialized()` | Check initialization status |
 | `set_default_jieba_dict_dir(dir)` | Set the process-wide default jieba dict dir for the FTS `jieba` tokenizer |
 | `get_default_jieba_dict_dir()` | Get the current default jieba dict dir (`""` when unset) |
+| `io_backend_type()` / `io_backend_type_name(code)` | Active DiskAnn I/O backend code and name (`io_uring`, `libaio`, `pread`, `windows_overlapped`) |
+| `io_backend_description()` | Human-readable description of the active I/O backend |
 
 Use [`ConfigBuilder`](zvec/src/config.rs) to customize memory limits, thread counts, and logging:
 

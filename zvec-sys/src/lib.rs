@@ -200,6 +200,8 @@ pub type zvec_log_level_t = u32;
 pub type zvec_log_type_t = u32;
 /// Document operation type (insert/update/delete).
 pub type zvec_doc_operator_t = u32;
+/// I/O backend used for DiskAnn disk reads.
+pub type zvec_io_backend_type_t = u32;
 
 // =============================================================================
 // Error Code Constants
@@ -384,6 +386,19 @@ pub const ZVEC_DOC_OP_UPDATE: zvec_doc_operator_t = 1;
 pub const ZVEC_DOC_OP_UPSERT: zvec_doc_operator_t = 2;
 /// Delete operation.
 pub const ZVEC_DOC_OP_DELETE: zvec_doc_operator_t = 3;
+
+// =============================================================================
+// I/O Backend Type Constants
+// =============================================================================
+
+/// Synchronous pread(); no async I/O.
+pub const ZVEC_IO_BACKEND_TYPE_PREAD: zvec_io_backend_type_t = 0;
+/// libaio loaded at runtime via dlopen().
+pub const ZVEC_IO_BACKEND_TYPE_LIBAIO: zvec_io_backend_type_t = 1;
+/// io_uring via raw Linux kernel syscalls (zero dependency).
+pub const ZVEC_IO_BACKEND_TYPE_IO_URING: zvec_io_backend_type_t = 2;
+/// Windows overlapped I/O using per-context IOCP.
+pub const ZVEC_IO_BACKEND_TYPE_WINDOWS_OVERLAPPED: zvec_io_backend_type_t = 3;
 
 // =============================================================================
 // Non-Opaque Structures
@@ -619,6 +634,14 @@ extern "C" {
     pub fn zvec_is_initialized() -> bool;
     pub fn zvec_set_default_jieba_dict_dir(dir: *const c_char);
     pub fn zvec_get_default_jieba_dict_dir() -> *const c_char;
+
+    // -------------------------------------------------------------------------
+    // I/O Backend Introspection
+    // Reports the backend used for DiskAnn disk reads.
+    // -------------------------------------------------------------------------
+    pub fn zvec_get_io_backend_type() -> zvec_io_backend_type_t;
+    pub fn zvec_get_io_backend_type_name(backend_type: zvec_io_backend_type_t) -> *const c_char;
+    pub fn zvec_get_io_backend_description() -> *const c_char;
 
     // -------------------------------------------------------------------------
     // Index Parameters
