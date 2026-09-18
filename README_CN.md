@@ -384,7 +384,7 @@ mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | 倒排文件索引 |
 | IVF RaBitQ | `IndexParams::ivf_rabitq(metric, nlist, total_bits, sample_count)` | 带 RaBitQ 量化的 IVF 索引 |
 | Flat | `IndexParams::flat(metric)` | 暴力搜索索引 |
-| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | 基于磁盘的图索引，适合大规模数据集（仅支持 Linux x86_64） |
+| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | 基于磁盘的图索引，适合大规模数据集（Linux x86_64/ARM64、macOS ARM64、Windows x86_64、64 位 Android/iOS） |
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 

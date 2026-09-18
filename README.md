@@ -389,7 +389,7 @@ Available distance metrics: `L2`, `Ip`, `Cosine`, `MipsL2`.
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | Inverted file index |
 | IVF RaBitQ | `IndexParams::ivf_rabitq(metric, nlist, total_bits, sample_count)` | IVF with RaBitQ quantization |
 | Flat | `IndexParams::flat(metric)` | Brute-force index |
-| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | Disk-based graph index for large datasets (Linux x86_64 only) |
+| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | Disk-based graph index for large datasets (Linux x86_64/ARM64, macOS ARM64, Windows x86_64, 64-bit Android/iOS) |
 | Invert | `IndexParams::invert(range, wildcard)` | Scalar field index |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | Full-text search index |
 
