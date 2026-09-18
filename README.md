@@ -279,7 +279,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.upsert(&docs)` | Insert or update |
 | `collection.delete(&pks)` | Delete by primary keys |
 | `collection.delete_by_filter(filter)` | Delete documents matching a filter expression |
-| `collection.query(&query)` | Vector similarity search |
+| `collection.query(&query)` | Scalar filtering, full-text, or vector similarity search |
 | `collection.multi_query(&query)` | Multi-route search with RRF / weighted rerank |
 | `collection.fetch(&pks)` | Fetch by primary keys |
 | `collection.fetch_with_options(&pks, fields, include_vector)` | Fetch with output-field control |
@@ -303,6 +303,22 @@ doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3])?;
 let name: Option<String> = doc.get_string("name")?;
 let count: Option<i64> = doc.get_i64("count")?;
 ```
+
+### Scalar Query
+
+Use `SearchQuery::scalar(topk)` to filter scalar fields without a query vector,
+FTS payload, or target field. It also works on collections with no vector fields:
+
+```rust
+let mut query = SearchQuery::scalar(10)?;
+query.set_filter("relative_path = 'src/main.rs'")?;
+query.set_output_fields(&["relative_path"])?;
+let results = collection.query(&query)?;
+```
+
+`topk` limits the number of returned documents, and their order is unspecified.
+A query without a filter returns up to `topk` documents; it does not enumerate
+all matches when there are more than that limit.
 
 ### Vector Query
 

@@ -275,7 +275,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.upsert(&docs)` | 插入或更新 |
 | `collection.delete(&pks)` | 按主键删除 |
 | `collection.delete_by_filter(filter)` | 按过滤表达式批量删除 |
-| `collection.query(&query)` | 向量相似度搜索 |
+| `collection.query(&query)` | 标量过滤、全文搜索或向量相似度搜索 |
 | `collection.multi_query(&query)` | 多路检索 + RRF / 加权重排 |
 | `collection.fetch(&pks)` | 按主键获取 |
 | `collection.fetch_with_options(&pks, fields, include_vector)` | 按主键获取并控制输出字段 |
@@ -299,6 +299,21 @@ doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3])?;
 let name: Option<String> = doc.get_string("name")?;
 let count: Option<i64> = doc.get_i64("count")?;
 ```
+
+### 标量查询
+
+使用 `SearchQuery::scalar(topk)` 可以只按标量字段过滤，无需查询向量、FTS 内容或目标字段，
+也适用于没有向量字段的集合：
+
+```rust
+let mut query = SearchQuery::scalar(10)?;
+query.set_filter("relative_path = 'src/main.rs'")?;
+query.set_output_fields(&["relative_path"])?;
+let results = collection.query(&query)?;
+```
+
+`topk` 限制返回的文档数量，结果顺序不作保证。不设置过滤条件时，最多返回 `topk` 条文档；
+如果匹配数量超过该限制，不会返回全部匹配项。
 
 ### 向量查询
 
