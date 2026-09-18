@@ -1727,12 +1727,6 @@ extern "C" {
     ) -> zvec_error_code_t;
     pub fn zvec_doc_merge(doc: *mut zvec_doc_t, other: *const zvec_doc_t);
     pub fn zvec_doc_memory_usage(doc: *const zvec_doc_t) -> usize;
-    pub fn zvec_doc_validate(
-        doc: *const zvec_doc_t,
-        schema: *const zvec_collection_schema_t,
-        is_update: bool,
-        error_msg: *mut *mut c_char,
-    ) -> zvec_error_code_t;
     pub fn zvec_doc_to_detail_string(
         doc: *const zvec_doc_t,
         detail_str: *mut *mut c_char,
