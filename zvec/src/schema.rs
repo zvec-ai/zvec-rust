@@ -291,6 +291,11 @@ impl IndexParams {
         })
     }
 
+    /// Returns whether vectors are randomly rotated before quantization.
+    pub fn quantizer_enable_rotate(&self) -> bool {
+        unsafe { zvec_rust_sys::zvec_index_params_get_quantizer_enable_rotate(self.handle) }
+    }
+
     /// Sets the metric type.
     pub fn set_metric_type(&mut self, metric: MetricType) -> Result<()> {
         check_error(unsafe {
@@ -302,6 +307,21 @@ impl IndexParams {
     pub fn set_quantize_type(&mut self, quantize: QuantizeType) -> Result<()> {
         check_error(unsafe {
             zvec_rust_sys::zvec_index_params_set_quantize_type(self.handle, quantize as u32)
+        })
+    }
+
+    /// Enables or disables random rotation before quantization.
+    ///
+    /// Rotating vectors before `Int8` / `Int4` quantization reduces the
+    /// quantization error. The rotation matrix is stored with the index and
+    /// applied to query vectors at search time, so it has no effect with other
+    /// quantize types.
+    ///
+    /// Only vector index params accept this option; scalar indexes (`invert`,
+    /// `fts`) return [`ErrorCode::InvalidArgument`].
+    pub fn set_quantizer_enable_rotate(&mut self, enable_rotate: bool) -> Result<()> {
+        check_error(unsafe {
+            zvec_rust_sys::zvec_index_params_set_quantizer_enable_rotate(self.handle, enable_rotate)
         })
     }
 }
@@ -825,6 +845,26 @@ mod tests {
                 .unwrap();
         params.set_quantize_type(QuantizeType::Int8).unwrap();
         assert_eq!(params.quantize_type(), QuantizeType::Int8);
+    }
+
+    #[test]
+    fn test_index_params_quantizer_enable_rotate() {
+        let mut params =
+            IndexParams::hnsw_with_quantize(MetricType::L2, 16, 200, QuantizeType::Int8).unwrap();
+        assert!(!params.quantizer_enable_rotate());
+        params.set_quantizer_enable_rotate(true).unwrap();
+        assert!(params.quantizer_enable_rotate());
+        params.set_quantizer_enable_rotate(false).unwrap();
+        assert!(!params.quantizer_enable_rotate());
+    }
+
+    #[test]
+    fn test_index_params_quantizer_enable_rotate_rejects_scalar_index() {
+        let mut params = IndexParams::invert(false, false).unwrap();
+        let err = params
+            .set_quantizer_enable_rotate(true)
+            .expect_err("scalar index params must reject the quantizer option");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
     }
 
     #[test]

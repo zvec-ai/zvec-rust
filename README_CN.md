@@ -386,6 +386,9 @@ mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 
+使用 `Int8` / `Int4` 量化时，`params.set_quantizer_enable_rotate(true)` 会在量化前对向量做随机旋转，
+以降低量化误差。旋转矩阵随索引一起保存，并在检索时自动作用于查询向量。
+
 ## 测试
 
 ```bash

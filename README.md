@@ -391,6 +391,10 @@ Available distance metrics: `L2`, `Ip`, `Cosine`, `MipsL2`.
 | Invert | `IndexParams::invert(range, wildcard)` | Scalar field index |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | Full-text search index |
 
+With `Int8` / `Int4` quantization, `params.set_quantizer_enable_rotate(true)` randomly rotates
+vectors before quantization to reduce the quantization error. The rotation matrix is stored with
+the index and applied to query vectors at search time.
+
 ## Testing
 
 ```bash

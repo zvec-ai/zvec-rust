@@ -641,6 +641,13 @@ extern "C" {
     pub fn zvec_index_params_get_quantize_type(
         params: *const zvec_index_params_t,
     ) -> zvec_quantize_type_t;
+    pub fn zvec_index_params_set_quantizer_enable_rotate(
+        params: *mut zvec_index_params_t,
+        enable_rotate: bool,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_get_quantizer_enable_rotate(
+        params: *const zvec_index_params_t,
+    ) -> bool;
     pub fn zvec_index_params_set_hnsw_params(
         params: *mut zvec_index_params_t,
         m: c_int,
