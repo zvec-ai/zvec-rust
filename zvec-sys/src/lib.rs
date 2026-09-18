@@ -268,6 +268,8 @@ pub const ZVEC_DATA_TYPE_VECTOR_INT4: zvec_data_type_t = 25;
 pub const ZVEC_DATA_TYPE_VECTOR_INT8: zvec_data_type_t = 26;
 /// Dense vector with INT16 quantized elements.
 pub const ZVEC_DATA_TYPE_VECTOR_INT16: zvec_data_type_t = 27;
+/// Dense vector with unsigned 8-bit elements (Flat reference storage).
+pub const ZVEC_DATA_TYPE_VECTOR_UINT8: zvec_data_type_t = 28;
 /// Sparse vector with FP16 elements.
 pub const ZVEC_DATA_TYPE_SPARSE_VECTOR_FP16: zvec_data_type_t = 30;
 /// Sparse vector with FP32 elements.

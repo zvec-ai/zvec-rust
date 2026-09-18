@@ -40,6 +40,12 @@ pub enum DataType {
     VectorInt8 = 26,
     /// Dense vector with 16-bit integer elements.
     VectorInt16 = 27,
+    /// Dense vector with unsigned 8-bit elements, used upstream for Flat
+    /// reference storage.
+    ///
+    /// Not treated as a vector field type: the native layer rejects a schema
+    /// that pairs it with vector index params.
+    VectorUint8 = 28,
     /// Sparse vector with 16-bit floating point values.
     SparseVectorFp16 = 30,
     /// Sparse vector with 32-bit floating point values.
@@ -85,6 +91,7 @@ impl From<u32> for DataType {
             25 => DataType::VectorInt4,
             26 => DataType::VectorInt8,
             27 => DataType::VectorInt16,
+            28 => DataType::VectorUint8,
             30 => DataType::SparseVectorFp16,
             31 => DataType::SparseVectorFp32,
             40 => DataType::ArrayBinary,
@@ -353,6 +360,7 @@ mod tests {
         assert_eq!(DataType::from(25), DataType::VectorInt4);
         assert_eq!(DataType::from(26), DataType::VectorInt8);
         assert_eq!(DataType::from(27), DataType::VectorInt16);
+        assert_eq!(DataType::from(28), DataType::VectorUint8);
     }
 
     #[test]
@@ -401,6 +409,7 @@ mod tests {
             DataType::VectorInt4,
             DataType::VectorInt8,
             DataType::VectorInt16,
+            DataType::VectorUint8,
             DataType::VectorBinary32,
             DataType::VectorBinary64,
             DataType::SparseVectorFp16,
