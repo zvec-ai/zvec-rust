@@ -295,12 +295,33 @@ impl Drop for Fts {
     }
 }
 
-/// A vector similarity search query.
+/// A scalar filter, full-text, or vector similarity search query.
 pub struct SearchQuery {
     pub(crate) handle: *mut zvec_rust_sys::zvec_vector_query_t,
 }
 
 impl SearchQuery {
+    /// Creates a scalar query without a vector or full-text field.
+    ///
+    /// Use [`SearchQuery::set_filter`] to select documents and
+    /// [`SearchQuery::set_output_fields`] to restrict the returned fields.
+    /// Results are limited to `topk` and have no guaranteed ordering; callers
+    /// enumerating all matches must account for that limit.
+    pub fn scalar(topk: i32) -> Result<Self> {
+        let handle = unsafe { zvec_rust_sys::zvec_vector_query_create() };
+        if handle.is_null() {
+            return Err(Error {
+                code: ErrorCode::InternalError,
+                message: "failed to create scalar query".into(),
+            });
+        }
+
+        // Own the handle before fallible setup so an error cannot leak it.
+        let query = SearchQuery { handle };
+        check_error(unsafe { zvec_rust_sys::zvec_vector_query_set_topk(query.handle, topk) })?;
+        Ok(query)
+    }
+
     /// Returns the raw FFI handle.
     ///
     /// # Safety
