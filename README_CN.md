@@ -317,6 +317,9 @@ let results = collection.query(&query)?;
 `topk` 限制返回的文档数量，结果顺序不作保证。不设置过滤条件时，最多返回 `topk` 条文档；
 如果匹配数量超过该限制，不会返回全部匹配项。
 
+`SearchQuery::builder()` 在不设置 `vector(..)` 和 FTS 子句时会构建同样的标量查询，
+此时必须省略 `field_name(..)`。
+
 ### 向量查询
 
 ```rust
@@ -332,6 +335,11 @@ let query = SearchQuery::builder()
     .output_fields(&["id", "name"])
     .build()?;
 ```
+
+Builder 会根据已设置的字段推断查询类型：设置 `vector(..)` 构建稠密向量查询
+（再叠加 FTS 子句即为混合检索）；只设置 FTS 子句构建纯关键词查询；
+两者都不设置则构建标量查询。纯关键词查询也可以直接用
+`SearchQuery::fts(field, fts, topk)` 构造。
 
 ### 多路检索（混合搜索）
 

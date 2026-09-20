@@ -322,6 +322,9 @@ let results = collection.query(&query)?;
 A query without a filter returns up to `topk` documents; it does not enumerate
 all matches when there are more than that limit.
 
+`SearchQuery::builder()` produces the same query when neither `vector(..)` nor an
+FTS clause is set; `field_name(..)` must then be omitted.
+
 ### Vector Query
 
 ```rust
@@ -337,6 +340,11 @@ let query = SearchQuery::builder()
     .output_fields(&["id", "name"])
     .build()?;
 ```
+
+The builder infers the query kind from what was set: `vector(..)` builds a dense
+vector query (adding an FTS clause makes it a hybrid search), an FTS clause
+without a vector builds a keyword-only query, and neither builds a scalar query.
+`SearchQuery::fts(field, fts, topk)` is the direct keyword-only constructor.
 
 ### Multi-Query (Hybrid Search)
 

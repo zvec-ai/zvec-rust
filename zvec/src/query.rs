@@ -594,40 +594,83 @@ impl SearchQueryBuilder {
     }
 
     /// Builds the search query.
+    ///
+    /// The query kind follows from what was set on the builder:
+    ///
+    /// - `vector(..)` plus `field_name(..)` builds a dense vector query; an FTS
+    ///   clause set alongside it is layered on top, producing a hybrid search.
+    /// - `field_name(..)` plus an FTS clause and no vector builds a keyword-only
+    ///   query, equivalent to [`SearchQuery::fts`].
+    /// - Neither a vector nor an FTS clause builds a scalar query, equivalent to
+    ///   [`SearchQuery::scalar`]; `field_name(..)` must then be omitted.
     pub fn build(self) -> Result<SearchQuery> {
-        let field_name = self.field_name.ok_or_else(|| Error {
-            code: ErrorCode::InvalidArgument,
-            message: "field_name is required".into(),
-        })?;
-        let vector = self.vector.ok_or_else(|| Error {
-            code: ErrorCode::InvalidArgument,
-            message: "vector is required".into(),
-        })?;
+        let SearchQueryBuilder {
+            field_name,
+            vector,
+            topk,
+            filter,
+            include_vector,
+            include_doc_id,
+            output_fields,
+            fts_query_string,
+            fts_match_string,
+        } = self;
 
-        let mut query = SearchQuery::new(&field_name, &vector, self.topk)?;
+        let fts = if fts_query_string.is_some() || fts_match_string.is_some() {
+            let mut payload = Fts::new()?;
+            if let Some(query_string) = &fts_query_string {
+                payload.set_query_string(query_string)?;
+            }
+            if let Some(match_string) = &fts_match_string {
+                payload.set_match_string(match_string)?;
+            }
+            Some(payload)
+        } else {
+            None
+        };
 
-        if let Some(filter) = &self.filter {
+        let mut query = match (vector, fts) {
+            (Some(vector), fts) => {
+                let field_name = field_name.ok_or_else(|| Error {
+                    code: ErrorCode::InvalidArgument,
+                    message: "field_name is required".into(),
+                })?;
+                let mut query = SearchQuery::new(&field_name, &vector, topk)?;
+                if let Some(payload) = &fts {
+                    query.set_fts(payload)?;
+                }
+                query
+            }
+            (None, Some(payload)) => {
+                let field_name = field_name.ok_or_else(|| Error {
+                    code: ErrorCode::InvalidArgument,
+                    message: "field_name is required".into(),
+                })?;
+                SearchQuery::fts(&field_name, &payload, topk)?
+            }
+            (None, None) => {
+                if field_name.is_some() {
+                    return Err(Error {
+                        code: ErrorCode::InvalidArgument,
+                        message: "field_name requires a vector or an FTS clause; omit it to build a scalar query".into(),
+                    });
+                }
+                SearchQuery::scalar(topk)?
+            }
+        };
+
+        if let Some(filter) = &filter {
             query.set_filter(filter)?;
         }
-        if let Some(include) = self.include_vector {
+        if let Some(include) = include_vector {
             query.set_include_vector(include)?;
         }
-        if let Some(include) = self.include_doc_id {
+        if let Some(include) = include_doc_id {
             query.set_include_doc_id(include)?;
         }
-        if let Some(fields) = &self.output_fields {
+        if let Some(fields) = &output_fields {
             let field_refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
             query.set_output_fields(&field_refs)?;
-        }
-        if self.fts_query_string.is_some() || self.fts_match_string.is_some() {
-            let mut fts = Fts::new()?;
-            if let Some(qs) = &self.fts_query_string {
-                fts.set_query_string(qs)?;
-            }
-            if let Some(ms) = &self.fts_match_string {
-                fts.set_match_string(ms)?;
-            }
-            query.set_fts(&fts)?;
         }
 
         Ok(query)
@@ -832,15 +875,90 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_query_builder_build_missing_vector() {
+    fn test_vector_query_builder_build_field_name_without_vector_or_fts() {
         let builder = SearchQueryBuilder::new().field_name("test_field");
 
         let result = builder.build();
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::InvalidArgument);
-            assert!(e.message.contains("vector is required"));
+            assert!(e.message.contains("omit it to build a scalar query"));
         }
+    }
+
+    #[test]
+    fn test_vector_query_builder_build_scalar_query() {
+        let query = SearchQueryBuilder::new()
+            .topk(3)
+            .filter("count > 1")
+            .include_doc_id(true)
+            .build()
+            .expect("scalar query without a field name or vector");
+
+        let handle = query.handle;
+        assert_eq!(
+            unsafe { zvec_rust_sys::zvec_vector_query_get_topk(handle) },
+            3
+        );
+        assert!(unsafe { zvec_rust_sys::zvec_vector_query_get_include_doc_id(handle) });
+        let filter = unsafe { zvec_rust_sys::zvec_vector_query_get_filter(handle) };
+        assert!(!filter.is_null());
+        assert_eq!(
+            unsafe { std::ffi::CStr::from_ptr(filter) }.to_str(),
+            Ok("count > 1")
+        );
+        assert!(unsafe { zvec_rust_sys::zvec_vector_query_get_fts(handle) }.is_null());
+    }
+
+    #[test]
+    fn test_vector_query_builder_build_fts_only_query() {
+        let query = SearchQueryBuilder::new()
+            .field_name("content")
+            .fts_match_string("hello world")
+            .topk(7)
+            .build()
+            .expect("keyword-only query without a vector");
+
+        let handle = query.handle;
+        assert_eq!(
+            unsafe { zvec_rust_sys::zvec_vector_query_get_topk(handle) },
+            7
+        );
+        let field_name = unsafe { zvec_rust_sys::zvec_vector_query_get_field_name(handle) };
+        assert!(!field_name.is_null());
+        assert_eq!(
+            unsafe { std::ffi::CStr::from_ptr(field_name) }.to_str(),
+            Ok("content")
+        );
+        assert!(!unsafe { zvec_rust_sys::zvec_vector_query_get_fts(handle) }.is_null());
+    }
+
+    #[test]
+    fn test_vector_query_builder_build_missing_field_name_with_fts() {
+        let result = SearchQueryBuilder::new().fts_match_string("hello").build();
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.code, ErrorCode::InvalidArgument);
+            assert!(e.message.contains("field_name is required"));
+        }
+    }
+
+    #[test]
+    fn test_vector_query_builder_build_hybrid_query() {
+        let query = SearchQueryBuilder::new()
+            .field_name("embedding")
+            .vector(&[1.0, 2.0])
+            .fts_match_string("hello")
+            .topk(4)
+            .build()
+            .expect("hybrid query keeps the FTS clause on top of the vector");
+
+        let handle = query.handle;
+        assert_eq!(
+            unsafe { zvec_rust_sys::zvec_vector_query_get_topk(handle) },
+            4
+        );
+        assert!(!unsafe { zvec_rust_sys::zvec_vector_query_get_fts(handle) }.is_null());
     }
 
     #[test]
@@ -918,8 +1036,9 @@ mod tests {
 
     #[test]
     fn test_fts_query_no_vector() {
-        // A pure FTS query must build without a query vector; the builder path
-        // (which requires `vector`) cannot express this.
+        // A pure FTS query must build without a query vector.
+        // `SearchQueryBuilder::build` reaches the same path when an FTS clause is
+        // set without a vector.
         let mut fts = Fts::new().expect("create fts payload");
         fts.set_match_string("hello world")
             .expect("set match string");

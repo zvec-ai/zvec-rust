@@ -1,7 +1,8 @@
 //! Regression coverage for querying a scalar-only collection through the safe API.
 
 use zvec_rust::{
-    initialize, Collection, CollectionSchema, DataType, Doc, FieldSchema, IndexParams, SearchQuery,
+    initialize, Collection, CollectionSchema, DataType, Doc, ErrorCode, FieldSchema, IndexParams,
+    SearchQuery,
 };
 
 #[test]
@@ -115,4 +116,24 @@ fn scalar_queries_support_exact_lookup_projection_and_limits() {
         collection.query(&limited).expect("limited results").len(),
         1
     );
+
+    // The builder reaches the same scalar path when neither a vector nor an FTS
+    // clause is set.
+    let built = SearchQuery::builder()
+        .topk(2)
+        .filter("relative_path = 'src/main.rs'")
+        .output_fields(&["relative_path"])
+        .build()
+        .expect("scalar query from the builder");
+    let results = collection.query(&built).expect("query through the builder");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].get_pk(), Some("1"));
+    assert!(!results[0].has_field("payload"));
+
+    // A field name without a vector or FTS clause is ambiguous, not a scalar query.
+    let err = match SearchQuery::builder().field_name("relative_path").build() {
+        Ok(_) => panic!("field_name alone must not build a scalar query"),
+        Err(err) => err,
+    };
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
 }
