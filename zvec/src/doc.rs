@@ -59,9 +59,23 @@ impl Doc {
     }
 
     /// Sets the primary key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `pk` contains an interior null byte. Use [`Doc::try_set_pk`] to
+    /// get an error instead.
     pub fn set_pk(&mut self, pk: &str) {
-        let c_pk = to_cstring(pk).expect("pk must not contain null bytes");
+        self.try_set_pk(pk).expect("pk must not contain null bytes");
+    }
+
+    /// Sets the primary key.
+    ///
+    /// Returns [`ErrorCode::InvalidArgument`] instead of panicking when `pk`
+    /// contains an interior null byte.
+    pub fn try_set_pk(&mut self, pk: &str) -> Result<()> {
+        let c_pk = to_cstring(pk)?;
         unsafe { zvec_rust_sys::zvec_doc_set_pk(self.handle, c_pk.as_ptr()) };
+        Ok(())
     }
 
     /// Returns the primary key, or `None` if not set.
@@ -585,5 +599,28 @@ mod tests {
         let doc = unsafe { Doc::from_raw(std::ptr::null_mut()) };
         assert!(doc.owned);
         // Drop with null handle is safe (no-op)
+    }
+
+    #[test]
+    fn try_set_pk_accepts_plain_key() {
+        let mut doc = Doc::new().expect("create doc");
+        doc.try_set_pk("pk-1").expect("plain pk is accepted");
+        assert_eq!(doc.get_pk(), Some("pk-1"));
+    }
+
+    #[test]
+    fn try_set_pk_rejects_interior_nul() {
+        let mut doc = Doc::new().expect("create doc");
+        let err = doc
+            .try_set_pk("pk\0-1")
+            .expect_err("an interior nul byte must be rejected");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+    }
+
+    #[test]
+    #[should_panic(expected = "pk must not contain null bytes")]
+    fn set_pk_panics_on_interior_nul() {
+        let mut doc = Doc::new().expect("create doc");
+        doc.set_pk("pk\0-1");
     }
 }
