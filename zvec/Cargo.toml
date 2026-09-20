@@ -12,7 +12,7 @@ categories = ["database", "api-bindings"]
 links = "zvec_rust"
 
 [dependencies]
-zvec-rust-sys = { path = "../zvec-sys", version = "0.7.1" }
+zvec-rust-sys = { path = "../zvec-sys", version = "0.7.2" }
 
 [features]
 default = ["bundled"]

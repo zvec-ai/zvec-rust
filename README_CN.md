@@ -58,7 +58,7 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ```toml
 [dependencies]
-zvec-rust = "0.7.1"
+zvec-rust = "0.7.2"
 ```
 
 `cargo run` / `cargo test` 可开箱即用，因为 Cargo 会把解析出的库目录传给链接器。
@@ -69,10 +69,10 @@ zvec-rust = "0.7.1"
 
 ```toml
 [dependencies]
-zvec-rust = "0.7.1"
+zvec-rust = "0.7.2"
 
 [build-dependencies]
-zvec-rust-build = "0.7.1"
+zvec-rust-build = "0.7.2"
 ```
 
 ```rust
