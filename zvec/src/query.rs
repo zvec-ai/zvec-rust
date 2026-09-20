@@ -349,8 +349,9 @@ impl SearchQuery {
             });
         }
 
-        let c_field = to_cstring(field_name)?;
+        // Own the handle before fallible setup so an error cannot leak it.
         let query = SearchQuery { handle };
+        let c_field = to_cstring(field_name)?;
 
         check_error(unsafe {
             zvec_rust_sys::zvec_vector_query_set_field_name(query.handle, c_field.as_ptr())
@@ -655,33 +656,35 @@ impl GroupBySearchQuery {
             });
         }
 
+        // Own the handle before fallible setup so an error cannot leak it.
+        let query = GroupBySearchQuery { handle };
         let c_field = to_cstring(field_name)?;
         let c_group_field = to_cstring(group_by_field)?;
 
         check_error(unsafe {
-            zvec_rust_sys::zvec_group_by_vector_query_set_field_name(handle, c_field.as_ptr())
+            zvec_rust_sys::zvec_group_by_vector_query_set_field_name(query.handle, c_field.as_ptr())
         })?;
         check_error(unsafe {
             zvec_rust_sys::zvec_group_by_vector_query_set_group_by_field_name(
-                handle,
+                query.handle,
                 c_group_field.as_ptr(),
             )
         })?;
         check_error(unsafe {
             zvec_rust_sys::zvec_group_by_vector_query_set_query_vector(
-                handle,
+                query.handle,
                 vector.as_ptr() as *const c_void,
                 std::mem::size_of_val(vector),
             )
         })?;
         check_error(unsafe {
-            zvec_rust_sys::zvec_group_by_vector_query_set_group_count(handle, group_count)
+            zvec_rust_sys::zvec_group_by_vector_query_set_group_count(query.handle, group_count)
         })?;
         check_error(unsafe {
-            zvec_rust_sys::zvec_group_by_vector_query_set_topk_per_group(handle, group_topk)
+            zvec_rust_sys::zvec_group_by_vector_query_set_topk_per_group(query.handle, group_topk)
         })?;
 
-        Ok(GroupBySearchQuery { handle })
+        Ok(query)
     }
 
     /// Sets the filter expression.
@@ -945,5 +948,25 @@ mod tests {
         assert_eq!(params.nprobe(), 32);
         params.set_scale_factor(2.5).expect("set scale_factor");
         assert!((params.scale_factor() - 2.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_group_by_query_new_rejects_nul_field_name() {
+        // The native handle is already created when the field name conversion
+        // fails, so it must be owned by the wrapper to avoid leaking it.
+        let result = GroupBySearchQuery::new("embedding\0", "category", &[0.1, 0.2], 2, 2);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.code, ErrorCode::InvalidArgument);
+        }
+    }
+
+    #[test]
+    fn test_vector_query_new_rejects_nul_field_name() {
+        let result = SearchQuery::new("embedding\0", &[0.1, 0.2], 2);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.code, ErrorCode::InvalidArgument);
+        }
     }
 }
