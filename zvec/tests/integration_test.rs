@@ -579,6 +579,66 @@ fn test_collection_add_and_drop_column() {
     assert!(!schema.has_field("new_col"));
 }
 
+#[test]
+fn test_collection_alter_column() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let collection = create_test_collection(tmp_dir.path());
+    insert_test_docs(&collection, 3);
+
+    let new_field = FieldSchema::new("alter_col", DataType::Int64, true, 0).unwrap();
+    collection.add_column(&new_field, None).unwrap();
+
+    // Renaming keeps the existing schema.
+    collection
+        .alter_column("alter_col", Some("renamed_col"), None)
+        .unwrap();
+    let schema = collection.schema().unwrap();
+    assert!(schema.has_field("renamed_col"));
+    assert!(!schema.has_field("alter_col"));
+
+    // A replacement schema carries the resulting column name.
+    let replacement = FieldSchema::new("final_col", DataType::Int64, true, 0).unwrap();
+    collection
+        .alter_column("renamed_col", None, Some(&replacement))
+        .unwrap();
+    let schema = collection.schema().unwrap();
+    assert!(schema.has_field("final_col"));
+    assert!(!schema.has_field("renamed_col"));
+
+    // The renamed column stays writable and readable.
+    let mut doc = Doc::new().unwrap();
+    doc.set_pk("pk_0");
+    doc.add_string("id", "pk_0").unwrap();
+    doc.add_string("category", "even").unwrap();
+    doc.add_f32("score", 0.1).unwrap();
+    doc.add_i64("count", 1).unwrap();
+    doc.add_i64("final_col", 7).unwrap();
+    doc.add_vector_f32("embedding", &[0.1, 0.2, 0.3, 0.4])
+        .unwrap();
+    assert_eq!(collection.upsert(&[&doc]).unwrap().success_count, 1);
+    let fetched = collection.fetch(&["pk_0"]).unwrap();
+    assert_eq!(fetched.len(), 1);
+    assert_eq!(fetched[0].get_i64("final_col").unwrap(), Some(7));
+
+    // Rename and schema are mutually exclusive, and one of them is required.
+    let err = collection
+        .alter_column("final_col", None, None)
+        .expect_err("altering nothing must be rejected");
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+    let conflicting = FieldSchema::new("other_col", DataType::Int64, true, 0).unwrap();
+    let err = collection
+        .alter_column("final_col", Some("other_col"), Some(&conflicting))
+        .expect_err("renaming and replacing the schema at once must be rejected");
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+    collection.drop_column("final_col").unwrap();
+    let schema = collection.schema().unwrap();
+    assert!(!schema.has_field("final_col"));
+}
+
 // =============================================================================
 // Edge Cases & Error Handling Tests
 // =============================================================================

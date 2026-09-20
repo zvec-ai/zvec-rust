@@ -283,6 +283,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.fetch_with_options(&pks, fields, include_vector)` | 按主键获取并控制输出字段 |
 | `collection.iter()` / `iter_with_options(fields, include_vector)` | 遍历全部文档（隔离快照） |
 | `collection.create_index(field, params)` / `drop_index(field)` | 运行时索引管理 |
+| `collection.add_column(schema, default_expr)` / `drop_column(name)` / `alter_column(name, new_name, new_schema)` | Schema 演进（DDL） |
 | `collection.optimize()` | 重建索引 / 合并段 |
 | `collection.stats()` | 获取集合统计信息 |
 | `collection.flush()` | 刷新到磁盘 |

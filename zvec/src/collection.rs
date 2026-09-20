@@ -543,6 +543,42 @@ impl Collection {
         })
     }
 
+    /// Alters a column: renames it, or replaces its schema.
+    ///
+    /// `new_name` and `new_schema` are mutually exclusive and at least one must be
+    /// given; any other combination is rejected with
+    /// [`ErrorCode::InvalidArgument`]. Renaming keeps the current schema, while a
+    /// new schema replaces the field definition outright — its own name becomes the
+    /// resulting column name, so pass `name` again to keep it unchanged. A nullable
+    /// field cannot be made non-nullable.
+    ///
+    /// The schema is deep-copied by the native layer, so `new_schema` stays owned
+    /// by the caller and is dropped as usual.
+    pub fn alter_column(
+        &self,
+        name: &str,
+        new_name: Option<&str>,
+        new_schema: Option<&FieldSchema>,
+    ) -> Result<()> {
+        let c_name = to_cstring(name)?;
+        let c_new_name = new_name.map(to_cstring).transpose()?;
+        let c_new_name_ptr = c_new_name
+            .as_ref()
+            .map(|s| s.as_ptr())
+            .unwrap_or(ptr::null());
+        let new_schema_ptr = new_schema
+            .map(|schema| schema.handle as *const zvec_rust_sys::zvec_field_schema_t)
+            .unwrap_or(ptr::null());
+        check_error(unsafe {
+            zvec_rust_sys::zvec_collection_alter_column(
+                self.handle,
+                c_name.as_ptr(),
+                c_new_name_ptr,
+                new_schema_ptr,
+            )
+        })
+    }
+
     /// Closes the collection explicitly.
     pub fn close(self) -> Result<()> {
         // Drop will handle the close

@@ -287,6 +287,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.fetch_with_options(&pks, fields, include_vector)` | Fetch with output-field control |
 | `collection.iter()` / `iter_with_options(fields, include_vector)` | Iterate over all documents (isolated snapshot) |
 | `collection.create_index(field, params)` / `drop_index(field)` | Runtime index management |
+| `collection.add_column(schema, default_expr)` / `drop_column(name)` / `alter_column(name, new_name, new_schema)` | Schema evolution (DDL) |
 | `collection.optimize()` | Rebuild indexes / merge segments |
 | `collection.stats()` | Get collection statistics |
 | `collection.flush()` | Flush to disk |
