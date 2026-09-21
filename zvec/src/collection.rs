@@ -360,6 +360,31 @@ impl Collection {
     }
 
     /// Fetches documents by primary keys with control over which fields to return.
+    ///
+    /// # Projections are destructive when written back
+    ///
+    /// A projected fetch (`output_fields` set, or `include_vector == false`)
+    /// returns a document shaped like the full schema in which the columns you did
+    /// not ask for are empty rather than absent. Passing such a document to
+    /// [`Collection::upsert`] or [`Collection::update`] therefore overwrites those
+    /// columns: nullable ones are silently set to null, while a missing
+    /// non-nullable one is rejected with [`ErrorCode::InvalidArgument`].
+    ///
+    /// A read-modify-write cycle must fetch the complete document:
+    ///
+    /// ```no_run
+    /// use zvec_rust::*;
+    ///
+    /// # fn f(collection: &Collection) -> Result<()> {
+    /// let mut docs = collection.fetch_with_options(&["doc1"], None, true)?;
+    /// docs[0].add_string("payload", "tombstone")?;
+    /// let refs: Vec<&Doc> = docs.iter().collect();
+    /// collection.upsert(&refs)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Keep projections for read-only paths.
     pub fn fetch_with_options(
         &self,
         pks: &[&str],

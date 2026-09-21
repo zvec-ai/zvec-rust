@@ -288,6 +288,12 @@ let schema = CollectionSchema::builder("name")
 | `collection.stats()` | 获取集合统计信息 |
 | `collection.flush()` | 刷新到磁盘 |
 
+**注意：** 带投影的 `fetch_with_options(pks, Some(&[..]), ..)`（或
+`include_vector = false`）返回的文档里，未被投影的列是「空值」而不是「不存在」。
+把这样的文档用 `upsert` / `update` 写回会覆盖这些列：可空列会被静默置为 null，
+缺少非空列则会返回 `InvalidArgument`。读-改-写场景请用
+`fetch_with_options(pks, None, true)` 取完整文档。
+
 ### 文档操作
 
 ```rust

@@ -449,6 +449,89 @@ fn test_collection_fetch_with_options() {
 }
 
 #[test]
+fn test_projected_fetch_is_destructive_when_written_back() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let collection = create_test_collection(tmp_dir.path());
+    insert_test_docs(&collection, 2);
+    collection.flush().unwrap();
+
+    let before = collection.fetch(&["pk_0"]).unwrap();
+    assert_eq!(before[0].get_f32("score").unwrap(), Some(0.0));
+    assert_eq!(before[0].get_i64("count").unwrap(), Some(0));
+
+    // A projection drops the unprojected columns from the returned document, so
+    // writing that document back is not a no-op for those columns.
+    let mut projected = collection
+        .fetch_with_options(&["pk_0"], Some(&["category"]), true)
+        .unwrap();
+    assert!(!projected[0].has_field("id"));
+    projected[0].add_string("category", "flipped").unwrap();
+    match collection.upsert(&[&projected[0]]) {
+        Ok(_) => panic!("a doc missing the non-nullable id column must be rejected"),
+        Err(err) => assert_eq!(err.code, ErrorCode::InvalidArgument),
+    }
+
+    // With every non-nullable column projected in, the write succeeds and the
+    // unprojected nullable columns are silently nulled out.
+    let mut projected = collection
+        .fetch_with_options(&["pk_0"], Some(&["id", "category"]), true)
+        .unwrap();
+    projected[0].add_string("category", "flipped").unwrap();
+    collection.upsert(&[&projected[0]]).unwrap();
+    collection.flush().unwrap();
+
+    let after = collection.fetch(&["pk_0"]).unwrap();
+    assert_eq!(
+        after[0].get_string("category").unwrap().as_deref(),
+        Some("flipped")
+    );
+    assert_eq!(
+        after[0].get_f32("score").unwrap(),
+        None,
+        "unprojected nullable column must not survive the write-back"
+    );
+    assert_eq!(
+        after[0].get_i64("count").unwrap(),
+        None,
+        "unprojected nullable column must not survive the write-back"
+    );
+    assert_eq!(
+        after[0]
+            .get_vector_f32("embedding")
+            .unwrap()
+            .map(|v| v.len()),
+        Some(4)
+    );
+
+    // The safe read-modify-write shape: fetch the whole document, write it back.
+    let mut full = collection
+        .fetch_with_options(&["pk_1"], None, true)
+        .unwrap();
+    let count_before = full[0].get_i64("count").unwrap();
+    let score_before = full[0].get_f32("score").unwrap();
+    full[0].add_string("category", "edited").unwrap();
+    collection.upsert(&[&full[0]]).unwrap();
+    collection.flush().unwrap();
+
+    let after = collection.fetch(&["pk_1"]).unwrap();
+    assert_eq!(
+        after[0].get_string("category").unwrap().as_deref(),
+        Some("edited")
+    );
+    assert_eq!(after[0].get_i64("count").unwrap(), count_before);
+    assert_eq!(after[0].get_f32("score").unwrap(), score_before);
+    assert_eq!(
+        after[0]
+            .get_vector_f32("embedding")
+            .unwrap()
+            .map(|v| v.len()),
+        Some(4)
+    );
+}
+
+#[test]
 fn test_collection_vector_query() {
     ensure_initialized();
 

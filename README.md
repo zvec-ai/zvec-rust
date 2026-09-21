@@ -292,6 +292,13 @@ let schema = CollectionSchema::builder("name")
 | `collection.stats()` | Get collection statistics |
 | `collection.flush()` | Flush to disk |
 
+**Caution:** a projected `fetch_with_options(pks, Some(&[..]), ..)` — or one with
+`include_vector = false` — returns a document whose unprojected columns are
+empty, not absent. Writing that document back with `upsert` / `update` overwrites
+those columns: nullable ones silently become null, and a missing non-nullable one
+is rejected with `InvalidArgument`. For a read-modify-write cycle, fetch the whole
+document with `fetch_with_options(pks, None, true)`.
+
 ### Document Operations
 
 ```rust
