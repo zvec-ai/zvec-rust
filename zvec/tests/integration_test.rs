@@ -371,6 +371,84 @@ fn test_collection_insert_and_fetch() {
 }
 
 #[test]
+fn test_collection_fetch_with_options() {
+    ensure_initialized();
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let collection = create_test_collection(tmp_dir.path());
+    let pks = insert_test_docs(&collection, 3);
+    let wanted = [pks[0].as_str(), pks[2].as_str()];
+
+    // Row selection + column projection against the in-memory writing segment.
+    let projected = collection
+        .fetch_with_options(&wanted, Some(&["id", "count"]), false)
+        .unwrap();
+    assert_eq!(projected.len(), 2);
+    for doc in &projected {
+        assert!(doc.has_field("id"));
+        assert!(doc.has_field("count"));
+        assert!(!doc.has_field("category"));
+        assert!(doc.get_vector_f32("embedding").is_err());
+    }
+    assert_eq!(projected[0].get_i64("count").unwrap(), Some(0));
+    assert_eq!(projected[1].get_i64("count").unwrap(), Some(2));
+
+    // A full fetch keeps the vector payload.
+    let full = collection
+        .fetch_with_options(&[pks[1].as_str()], None, true)
+        .unwrap();
+    assert_eq!(full.len(), 1);
+    assert_eq!(
+        full[0]
+            .get_vector_f32("embedding")
+            .unwrap()
+            .map(|v| v.len()),
+        Some(4)
+    );
+
+    // An empty projection is treated as "all fields" by the native fetch path
+    // (a zero entry count means no projection), unlike `iter_with_options`,
+    // which returns only the primary key for an empty list.
+    let unprojected = collection
+        .fetch_with_options(&wanted, Some(&[]), false)
+        .unwrap();
+    assert_eq!(unprojected.len(), 2);
+    for doc in &unprojected {
+        assert!(doc.get_pk().is_some());
+        assert!(doc.has_field("id"));
+        assert!(doc.has_field("category"));
+    }
+
+    // Unknown primary keys are skipped instead of failing the whole batch.
+    let mixed = collection
+        .fetch_with_options(&[pks[0].as_str(), "missing_pk"], Some(&["id"]), false)
+        .unwrap();
+    assert_eq!(mixed.len(), 1);
+    assert_eq!(mixed[0].get_pk(), Some(pks[0].as_str()));
+
+    // Repeat after a flush so the persisted forward store is covered as well.
+    collection.flush().unwrap();
+    let projected = collection
+        .fetch_with_options(&wanted, Some(&["id", "count"]), false)
+        .unwrap();
+    assert_eq!(projected.len(), 2);
+    for doc in &projected {
+        assert!(doc.has_field("id"));
+        assert!(!doc.has_field("category"));
+    }
+    let full = collection
+        .fetch_with_options(&[pks[1].as_str()], None, true)
+        .unwrap();
+    assert_eq!(
+        full[0]
+            .get_vector_f32("embedding")
+            .unwrap()
+            .map(|v| v.len()),
+        Some(4)
+    );
+}
+
+#[test]
 fn test_collection_vector_query() {
     ensure_initialized();
 
