@@ -52,8 +52,10 @@ jobs:
         include:
           - platform: macos-arm64
             os: macos-15
-          # - platform: macos-x64
-          #   os: macos-13
+          # Intel macOS: same runner upstream zvec uses for its macos-x64 CI
+          # job and its osx-amd64 prebuilt SDK.
+          - platform: macos-x64
+            os: macos-15-intel
           - platform: linux-x64
             os: ubuntu-24.04
           - platform: linux-arm64
@@ -105,6 +107,13 @@ jobs:
         run: |
           cd vendor/zvec
           mkdir -p build && cd build
+
+          # The Intel job must really be on an x86_64 host: a mislabelled
+          # runner would build arm64 objects and fail later with a confusing
+          # link error.
+          if [[ "${{ matrix.platform }}" == macos-x64 ]]; then
+            test "$(uname -m)" = "x86_64"
+          fi
 
           if [[ "${{ matrix.platform }}" == macos-* ]]; then
             NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)

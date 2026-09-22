@@ -22,8 +22,8 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 
 | Platform | Architecture | CI Status | Notes |
 |----------|-------------|-----------|-------|
-| **macOS** | ARM64 (Apple Silicon) | ✅ Clippy + Test | Primary development platform |
-| **macOS** | x86_64 (Intel) | ✅ Clippy + Test | |
+| **macOS** | ARM64 (Apple Silicon) | ✅ Prebuilt + Clippy + Test | Primary development platform; requires macOS 14+ |
+| **macOS** | x86_64 (Intel) | ✅ Prebuilt + Clippy + Test | Built natively on `macos-15-intel`; requires macOS 11+ |
 | **Linux** | x86_64 | ✅ Clippy + Test + Fuzz + Coverage + Benchmark | Full CI coverage |
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + Test + Fuzz + Coverage | |
 | **Linux (musl)** | x86_64 | ✅ Prebuilt | Alpine/musl distros; built in `musllinux_1_2`, same baseline as upstream zvec |

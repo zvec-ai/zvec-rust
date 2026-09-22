@@ -22,10 +22,20 @@ jobs:
             os: macos-15
             lib_name: libzvec_c_api.dylib
             container: ''
-          # - target: x86_64-apple-darwin
-          #   os: macos-13
-          #   lib_name: libzvec_c_api.dylib
-          #   container: ''
+            uname_m: arm64
+            # macOS 14.0 baseline, same as the artifacts published so far.
+            macos_deployment_target: '14.0'
+          # Intel macOS, built natively on GitHub's macos-15-intel runner — the
+          # same runner upstream zvec uses for its osx-amd64 SDK
+          # (_build_macos_x64_sdk.yml), its macos-x64 CI job and its x86_64
+          # wheels. The 11.0 baseline matches upstream's osx-amd64 SDK: Intel
+          # Macs top out at macOS 15 and many still run Big Sur/Monterey.
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            lib_name: libzvec_c_api.dylib
+            container: ''
+            uname_m: x86_64
+            macos_deployment_target: '11.0'
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-24.04
             lib_name: libzvec_c_api.so
@@ -118,24 +128,45 @@ jobs:
         shell: bash
 
       # macOS: build via scikit-build (pip), which places the outputs under
-      # vendor/zvec/build like the container builds above.
-      - name: Build zvec C library (Unix)
+      # vendor/zvec/build like the container builds above. Every architecture
+      # builds natively on its own runner (arm64 on macos-15, x86_64 on
+      # macos-15-intel), so no cross-compilation toolchain is involved.
+      - name: Build zvec C library (macOS)
         if: runner.os == 'macOS'
         run: |
+          # A mislabelled runner would silently produce a library for the wrong
+          # slice, so pin the expectation down before spending an hour on it.
+          test "$(uname -m)" = "${{ matrix.uname_m }}"
+
           cd vendor/zvec
 
           NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
 
           python -m pip install --upgrade pip pybind11==3.0 cmake==3.30.0 ninja==1.11.1 scikit-build-core setuptools_scm
 
-          # Set macOS deployment target to support macOS 14.x (Sonoma) and later
-          export MACOSX_DEPLOYMENT_TARGET="14.0"
+          # Deployment target comes from the matrix (see the comments there):
+          # CMake picks it up from the environment and stamps it into the
+          # linked dylib as its minimum OS version.
+          export MACOSX_DEPLOYMENT_TARGET="${{ matrix.macos_deployment_target }}"
 
           CMAKE_GENERATOR="Unix Makefiles" \
           CMAKE_BUILD_PARALLEL_LEVEL="$NPROC" \
           python -m pip install -v . \
             --no-build-isolation \
             --config-settings='cmake.define.BUILD_TOOLS="ON"'
+        shell: bash
+
+      # Fail loudly if the macOS library is not the slice the target names, or
+      # if the deployment baseline drifted away from the matrix entry. Mirrors
+      # the architecture check in upstream zvec's _build_macos_x64_sdk.yml.
+      - name: Verify library architecture (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          LIB="$(find vendor/zvec/build -name '${{ matrix.lib_name }}' | head -1)"
+          test -n "$LIB"
+          echo "$LIB: $(lipo -archs "$LIB")"
+          lipo -archs "$LIB" | tr ' ' '\n' | grep -Fx '${{ matrix.uname_m }}'
+          otool -l "$LIB" | grep -A4 LC_BUILD_VERSION | grep -E 'platform|minos'
         shell: bash
 
       - name: Setup MSVC environment

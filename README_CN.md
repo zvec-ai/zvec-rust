@@ -22,8 +22,8 @@
 
 | 平台 | 架构 | CI 状态 | 备注 |
 |------|------|---------|------|
-| **macOS** | ARM64 (Apple Silicon) | ✅ Clippy + 测试 | 主要开发平台 |
-| **macOS** | x86_64 (Intel) | ✅ Clippy + 测试 | |
+| **macOS** | ARM64 (Apple Silicon) | ✅ 预编译 + Clippy + 测试 | 主要开发平台；需 macOS 14+ |
+| **macOS** | x86_64 (Intel) | ✅ 预编译 + Clippy + 测试 | 在 `macos-15-intel` 上原生构建；需 macOS 11+ |
 | **Linux** | x86_64 | ✅ Clippy + 测试 + 模糊测试 + 覆盖率 + 基准测试 | 完整 CI 覆盖 |
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + 测试 + 模糊测试 + 覆盖率 | |
 | **Linux (musl)** | x86_64 | ✅ 预编译 | Alpine/musl 发行版；在 `musllinux_1_2` 中构建，与上游 zvec 基线一致 |
