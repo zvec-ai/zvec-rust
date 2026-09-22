@@ -238,7 +238,8 @@ fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
     let cmake_build_dir = build_dir.join("cmake-build");
     std::fs::create_dir_all(&cmake_build_dir).ok()?;
 
-    // Set macOS deployment target to 14.0 for compatibility
+    // Set the platform flags below for macOS; other platforms use CMake's
+    // defaults.
     let mut cmake_args = vec![
         zvec_src.to_str()?,
         "-DCMAKE_BUILD_TYPE=Release",
@@ -246,9 +247,27 @@ fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
         "-DBUILD_TOOLS=OFF",
     ];
 
-    // Add macOS deployment target if building for macOS
+    // Add the macOS architecture and deployment target if building for macOS.
     if target_os == "macos" {
-        cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0");
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        // Build the slice Cargo is targeting, so that e.g. `--target
+        // x86_64-apple-darwin` on an Apple Silicon host does not silently
+        // produce an arm64 library that the linker then rejects.
+        //
+        // Deployment targets match the published prebuilt artifacts: 14.0 for
+        // Apple Silicon, 11.0 for Intel (Intel Macs top out at macOS 15, and
+        // many still run Big Sur/Monterey).
+        match target_arch.as_str() {
+            "aarch64" => {
+                cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=arm64");
+                cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0");
+            }
+            "x86_64" => {
+                cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=x86_64");
+                cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0");
+            }
+            _ => cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0"),
+        }
     }
 
     let configure_output = Command::new("cmake")
