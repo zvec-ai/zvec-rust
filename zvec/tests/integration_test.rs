@@ -390,8 +390,22 @@ fn test_collection_fetch_with_options() {
         assert!(!doc.has_field("category"));
         assert!(doc.get_vector_f32("embedding").is_err());
     }
-    assert_eq!(projected[0].get_i64("count").unwrap(), Some(0));
-    assert_eq!(projected[1].get_i64("count").unwrap(), Some(2));
+    // The native fetch does not promise to return rows in the order the
+    // primary keys were requested in (Linux returns the persisted segment
+    // order), so key the expectations by the projected `id` column instead of
+    // indexing into the result vector.
+    let counts: std::collections::HashMap<String, i64> = projected
+        .iter()
+        .map(|doc| {
+            (
+                doc.get_string("id").unwrap().unwrap(),
+                doc.get_i64("count").unwrap().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(counts.len(), 2, "each requested row must come back once");
+    assert_eq!(counts.get(&pks[0]).copied(), Some(0));
+    assert_eq!(counts.get(&pks[2]).copied(), Some(2));
 
     // A full fetch keeps the vector payload.
     let full = collection

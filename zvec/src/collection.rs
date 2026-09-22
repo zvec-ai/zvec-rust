@@ -385,6 +385,14 @@ impl Collection {
     /// ```
     ///
     /// Keep projections for read-only paths.
+    ///
+    /// # Row order is not guaranteed
+    ///
+    /// The returned documents are not guaranteed to come back in the order the
+    /// primary keys were requested in, and the order can differ between
+    /// platforms and between the in-memory writing segment and the persisted
+    /// forward store. Match rows by primary key (or by a projected field)
+    /// instead of by position.
     pub fn fetch_with_options(
         &self,
         pks: &[&str],
