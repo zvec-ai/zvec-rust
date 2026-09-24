@@ -249,25 +249,20 @@ fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
 
     // Add the macOS architecture and deployment target if building for macOS.
     if target_os == "macos" {
-        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         // Build the slice Cargo is targeting, so that e.g. `--target
         // x86_64-apple-darwin` on an Apple Silicon host does not silently
         // produce an arm64 library that the linker then rejects.
-        //
-        // Deployment targets match the published prebuilt artifacts: 14.0 for
-        // Apple Silicon, 11.0 for Intel (Intel Macs top out at macOS 15, and
-        // many still run Big Sur/Monterey).
-        match target_arch.as_str() {
-            "aarch64" => {
-                cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=arm64");
-                cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0");
-            }
-            "x86_64" => {
-                cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=x86_64");
-                cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0");
-            }
-            _ => cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0"),
+        match env::var("CARGO_CFG_TARGET_ARCH")
+            .unwrap_or_default()
+            .as_str()
+        {
+            "aarch64" => cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=arm64"),
+            "x86_64" => cmake_args.push("-DCMAKE_OSX_ARCHITECTURES=x86_64"),
+            _ => {}
         }
+        // macOS 11.0 baseline on both architectures, matching the published
+        // prebuilt artifacts and upstream zvec's own SDK builds.
+        cmake_args.push("-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0");
     }
 
     let configure_output = Command::new("cmake")

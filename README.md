@@ -22,7 +22,7 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 
 | Platform | Architecture | CI Status | Notes |
 |----------|-------------|-----------|-------|
-| **macOS** | ARM64 (Apple Silicon) | ✅ Prebuilt + Clippy + Test | Primary development platform; requires macOS 14+ |
+| **macOS** | ARM64 (Apple Silicon) | ✅ Prebuilt + Clippy + Test | Primary development platform; requires macOS 11+ |
 | **macOS** | x86_64 (Intel) | ✅ Prebuilt + Clippy + Test | Built natively on `macos-15-intel`; requires macOS 11+ |
 | **Linux** | x86_64 | ✅ Clippy + Test + Fuzz + Coverage + Benchmark | Full CI coverage |
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + Test + Fuzz + Coverage | |
@@ -33,6 +33,10 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 > Linux gnu prebuilts target glibc 2.28 (`manylinux_2_28`, same as upstream
 > zvec), so they work on glibc distros as old as CentOS 8 / Ubuntu 20.04.
 > musl prebuilts work on musl distros such as Alpine (musl 1.2+).
+
+> macOS prebuilts target macOS 11.0 on both architectures, the same baseline as
+> upstream zvec's SDK builds. Releases up to v0.7.2 stamped macOS 14.0 on Apple
+> Silicon and shipped no Intel build.
 
 > The dynamic library name varies by platform: `libzvec_c_api.dylib` (macOS), `libzvec_c_api.so` (Linux), `zvec_c_api.dll` (Windows).
 

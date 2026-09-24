@@ -22,7 +22,7 @@
 
 | 平台 | 架构 | CI 状态 | 备注 |
 |------|------|---------|------|
-| **macOS** | ARM64 (Apple Silicon) | ✅ 预编译 + Clippy + 测试 | 主要开发平台；需 macOS 14+ |
+| **macOS** | ARM64 (Apple Silicon) | ✅ 预编译 + Clippy + 测试 | 主要开发平台；需 macOS 11+ |
 | **macOS** | x86_64 (Intel) | ✅ 预编译 + Clippy + 测试 | 在 `macos-15-intel` 上原生构建；需 macOS 11+ |
 | **Linux** | x86_64 | ✅ Clippy + 测试 + 模糊测试 + 覆盖率 + 基准测试 | 完整 CI 覆盖 |
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + 测试 + 模糊测试 + 覆盖率 | |
@@ -33,6 +33,9 @@
 > Linux gnu 预编译产物面向 glibc 2.28（`manylinux_2_28`，与上游 zvec 一致），
 > 可运行在 CentOS 8 / Ubuntu 20.04 及以上版本的 glibc 发行版；
 > musl 预编译产物可运行在 Alpine（musl 1.2+）等 musl 发行版。
+
+> macOS 预编译产物在两个架构上均以 macOS 11.0 为基线，与上游 zvec 的 SDK 构建一致。
+> v0.7.2 及之前的版本在 Apple Silicon 上标记为 macOS 14.0，且没有 Intel 产物。
 
 > 动态库文件名因平台而异：`libzvec_c_api.dylib`（macOS）、`libzvec_c_api.so`（Linux）、`zvec_c_api.dll`（Windows）。
 

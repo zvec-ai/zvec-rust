@@ -23,13 +23,15 @@ jobs:
             lib_name: libzvec_c_api.dylib
             container: ''
             uname_m: arm64
-            # macOS 14.0 baseline, same as the artifacts published so far.
-            macos_deployment_target: '14.0'
+            # Both macOS architectures use upstream zvec's 11.0 baseline (see
+            # the cmake_platform_args in its _build_prebuilt.yml and its
+            # _build_macos_x64_sdk.yml), so the prebuilts run on Big Sur and
+            # later instead of requiring Sonoma.
+            macos_deployment_target: '11.0'
           # Intel macOS, built natively on GitHub's macos-15-intel runner — the
           # same runner upstream zvec uses for its osx-amd64 SDK
           # (_build_macos_x64_sdk.yml), its macos-x64 CI job and its x86_64
-          # wheels. The 11.0 baseline matches upstream's osx-amd64 SDK: Intel
-          # Macs top out at macOS 15 and many still run Big Sur/Monterey.
+          # wheels.
           - target: x86_64-apple-darwin
             os: macos-15-intel
             lib_name: libzvec_c_api.dylib
