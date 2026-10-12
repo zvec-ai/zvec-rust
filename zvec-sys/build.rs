@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6,6 +7,23 @@ use std::process::Command;
 const PREBUILT_REPO: &str = "zvec-ai/zvec-rust";
 
 fn main() {
+    for key in [
+        "ZVEC_LIB_DIR",
+        "ZVEC_INCLUDE_DIR",
+        "ZVEC_AUTO_BUILD",
+        "ZVEC_REPO_URL",
+        "ZVEC_PREBUILT_URL",
+        "DOCS_RS",
+    ] {
+        println!("cargo:rerun-if-env-changed={key}");
+    }
+
+    // Documentation builds do not link the native library, and docs.rs
+    // disables network access in its build sandbox.
+    if env::var_os("DOCS_RS").is_some() {
+        return;
+    }
+
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let workspace_root = PathBuf::from(&manifest_dir).parent().unwrap().to_path_buf();
 
@@ -14,7 +32,7 @@ fn main() {
     //   2. A sibling `zvec` checkout: ../zvec/build/lib and ../zvec/src/include
     //   3. Git submodule: <workspace>/vendor/zvec/build/lib
     //   4. A vendored copy under <workspace>/vendor/ (pre-built binaries)
-    //   5. Download prebuilt dynamic library from GitHub Release
+    //   5. Reuse a cached SDK or download it from GitHub Release
     //   6. Auto-build: clone zvec from GitHub and build with CMake
     let sibling_zvec = workspace_root.parent().map(|p| p.join("zvec"));
     let submodule_zvec = workspace_root.join("vendor").join("zvec");
@@ -30,6 +48,14 @@ fn main() {
         &prebuilt_cache_dir,
         &auto_build_dir,
     );
+    if lib_dir.is_none() {
+        panic!(
+            "Could not find libzvec_c_api for {}. See the acquisition errors above. \
+             Set ZVEC_LIB_DIR to a directory containing the native library, \
+             or enable the bundled feature with ZVEC_AUTO_BUILD unset or set to 1.",
+            env::var("TARGET").unwrap_or_default()
+        );
+    }
     let include_dir =
         resolve_include_dir(&sibling_zvec, &submodule_zvec, &vendor_dir, &auto_build_dir);
 
@@ -71,11 +97,6 @@ fn main() {
     }
 
     println!("cargo:rustc-link-lib=dylib=zvec_c_api");
-    println!("cargo:rerun-if-env-changed=ZVEC_LIB_DIR");
-    println!("cargo:rerun-if-env-changed=ZVEC_INCLUDE_DIR");
-    println!("cargo:rerun-if-env-changed=ZVEC_AUTO_BUILD");
-    println!("cargo:rerun-if-env-changed=ZVEC_REPO_URL");
-    println!("cargo:rerun-if-env-changed=ZVEC_PREBUILT_URL");
 }
 
 fn resolve_lib_dir(
@@ -86,12 +107,16 @@ fn resolve_lib_dir(
     auto_build_dir: &Path,
 ) -> Option<PathBuf> {
     // 1. Environment variable (highest priority — for advanced users)
-    if let Ok(custom) = env::var("ZVEC_LIB_DIR") {
+    if let Some(custom) = env::var_os("ZVEC_LIB_DIR") {
         let path = PathBuf::from(&custom);
-        if path.exists() {
+        if has_zvec_lib(&path) {
             return Some(path);
         }
-        println!("cargo:warning=ZVEC_LIB_DIR={} does not exist", custom);
+        println!(
+            "cargo:warning=ZVEC_LIB_DIR={} does not contain the required native library; \
+             continuing library resolution.",
+            path.display()
+        );
     }
 
     // 2. Sibling zvec checkout
@@ -114,7 +139,7 @@ fn resolve_lib_dir(
         return Some(vendor_lib);
     }
 
-    // 5. Download prebuilt dynamic library from GitHub Release
+    // 5. Reuse a cached SDK or download it from GitHub Release
     if cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
         if let Some(dir) = download_prebuilt(prebuilt_cache_dir) {
             return Some(dir);
@@ -128,9 +153,6 @@ fn resolve_lib_dir(
         }
     }
 
-    println!(
-        "cargo:warning=Could not find libzvec_c_api. Set ZVEC_LIB_DIR, place a sibling zvec/ checkout, pre-build vendor/lib, or enable the bundled feature."
-    );
     None
 }
 
@@ -173,21 +195,21 @@ fn resolve_include_dir(
 fn has_zvec_lib(dir: &Path) -> bool {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     match target_os.as_str() {
-        "macos" | "ios" => dir.join("libzvec_c_api.dylib").exists(),
+        "macos" | "ios" => dir.join("libzvec_c_api.dylib").is_file(),
         "windows" => {
             // MSVC dynamic linking requires the .lib import library; the .dll
             // alone is not enough for the linker. The GNU/MinGW toolchain can
             // link directly against the .dll (or a .dll.a import lib).
             let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
             if target_env == "msvc" {
-                dir.join("zvec_c_api.lib").exists()
+                dir.join("zvec_c_api.lib").is_file()
             } else {
-                dir.join("libzvec_c_api.dll.a").exists()
-                    || dir.join("zvec_c_api.lib").exists()
-                    || dir.join("zvec_c_api.dll").exists()
+                dir.join("libzvec_c_api.dll.a").is_file()
+                    || dir.join("zvec_c_api.lib").is_file()
+                    || dir.join("zvec_c_api.dll").is_file()
             }
         }
-        _ => dir.join("libzvec_c_api.so").exists(),
+        _ => dir.join("libzvec_c_api.so").is_file(),
     }
 }
 
@@ -346,13 +368,23 @@ fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
 ///   1. `ZVEC_PREBUILT_URL` environment variable (full URL to the .tar.gz)
 ///   2. GitHub Release: `https://github.com/{PREBUILT_REPO}/releases/download/v{version}/zvec-prebuilt-{target}.tar.gz`
 fn download_prebuilt(cache_dir: &Path) -> Option<PathBuf> {
-    // If the cached library already exists, reuse it
-    if cache_dir.exists() && has_zvec_lib(cache_dir) {
+    // If the cached library already exists, reuse it only when extraction
+    // completed successfully. A library file alone may be a partial SDK.
+    if has_complete_prebuilt(cache_dir) {
         println!(
             "cargo:warning=Using cached prebuilt library from {}",
             cache_dir.display()
         );
         return Some(cache_dir.to_path_buf());
+    }
+    if cache_dir.exists() {
+        if let Err(error) = fs::remove_dir_all(cache_dir) {
+            println!(
+                "cargo:warning=Failed to remove incomplete prebuilt cache {}: {error}",
+                cache_dir.display()
+            );
+            return None;
+        }
     }
 
     let target = env::var("TARGET").unwrap_or_default();
@@ -373,14 +405,24 @@ fn download_prebuilt(cache_dir: &Path) -> Option<PathBuf> {
         target, url
     );
 
-    std::fs::create_dir_all(cache_dir).ok()?;
+    // Extract in a separate staging directory so a failed extraction cannot
+    // leave a reusable library in the cache.
+    let staging_dir = create_staging_dir(cache_dir)?;
+    let extracted_dir = staging_dir.join("sdk");
+    if let Err(error) = fs::create_dir(&extracted_dir) {
+        println!(
+            "cargo:warning=Failed to create extraction directory {}: {error}",
+            extracted_dir.display()
+        );
+        let _ = fs::remove_dir_all(&staging_dir);
+        return None;
+    }
 
     // Try curl first (available on macOS, Linux, and modern Windows)
-    let tar_path = cache_dir.join("prebuilt.tar.gz");
+    let tar_path = staging_dir.join("prebuilt.tar.gz");
     let download_success = try_download_curl(&url, &tar_path)
-        .or_else(|| try_download_wget(&url, &tar_path))
-        .or_else(|| try_download_powershell(&url, &tar_path))
-        .unwrap_or(false);
+        || try_download_wget(&url, &tar_path)
+        || (cfg!(windows) && try_download_powershell(&url, &tar_path));
 
     if !download_success {
         println!(
@@ -388,95 +430,171 @@ fn download_prebuilt(cache_dir: &Path) -> Option<PathBuf> {
              Install zvec manually or set ZVEC_LIB_DIR."
         );
         // Clean up partial download
-        let _ = std::fs::remove_dir_all(cache_dir);
+        let _ = fs::remove_dir_all(&staging_dir);
         return None;
     }
 
     // Extract the tarball
-    let extract_success = extract_tarball(&tar_path, cache_dir);
-    // Remove the tarball after extraction
-    let _ = std::fs::remove_file(&tar_path);
+    let extract_success = extract_tarball(&tar_path, &extracted_dir);
 
     if !extract_success {
-        println!("cargo:warning=Failed to extract prebuilt library archive.");
-        let _ = std::fs::remove_dir_all(cache_dir);
+        println!(
+            "cargo:warning=Failed to extract prebuilt library archive. \
+             Archive retained for inspection at {}",
+            tar_path.display()
+        );
         return None;
     }
 
-    if has_zvec_lib(cache_dir) {
+    if !has_zvec_lib(&extracted_dir) {
         println!(
-            "cargo:warning=Successfully downloaded prebuilt library to {}",
-            cache_dir.display()
+            "cargo:warning=Downloaded archive did not contain the expected library for {}. \
+             Archive retained for inspection at {}",
+            target,
+            tar_path.display()
         );
-        Some(cache_dir.to_path_buf())
-    } else {
-        println!("cargo:warning=Downloaded archive did not contain expected library.");
-        let _ = std::fs::remove_dir_all(cache_dir);
-        None
+        return None;
     }
-}
 
-fn try_download_curl(url: &str, dest: &Path) -> Option<bool> {
-    let output = Command::new("curl")
-        .args([
-            "-fsSL",
-            "--retry",
-            "3",
-            "--retry-delay",
-            "2",
-            "-o",
-            dest.to_str()?,
-            url,
-        ])
-        .output()
-        .ok()?;
-    Some(output.status.success())
-}
+    if let Err(error) = fs::write(extracted_dir.join(".complete"), b"complete") {
+        println!(
+            "cargo:warning=Failed to mark prebuilt SDK as complete: {error}. \
+             Download retained at {}",
+            staging_dir.display()
+        );
+        return None;
+    }
 
-fn try_download_wget(url: &str, dest: &Path) -> Option<bool> {
-    let output = Command::new("wget")
-        .args(["-q", "--tries=3", "-O", dest.to_str()?, url])
-        .output()
-        .ok()?;
-    Some(output.status.success())
-}
+    // Publish the SDK only after extraction and library validation succeed.
+    if let Err(error) = fs::rename(&extracted_dir, cache_dir) {
+        println!(
+            "cargo:warning=Failed to publish prebuilt SDK at {}: {error}. \
+             Download retained at {}",
+            cache_dir.display(),
+            staging_dir.display()
+        );
+        return None;
+    }
 
-fn try_download_powershell(url: &str, dest: &Path) -> Option<bool> {
-    let script = format!(
-        "Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing",
-        url,
-        dest.display()
+    // Remove the tarball and staging directory after successful publication.
+    let _ = fs::remove_dir_all(&staging_dir);
+    println!(
+        "cargo:warning=Prebuilt library ready at {}",
+        cache_dir.display()
     );
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .output()
-        .ok()?;
-    Some(output.status.success())
+    Some(cache_dir.to_path_buf())
+}
+
+fn has_complete_prebuilt(cache_dir: &Path) -> bool {
+    has_zvec_lib(cache_dir) && cache_dir.join(".complete").is_file()
+}
+
+fn create_staging_dir(cache_dir: &Path) -> Option<PathBuf> {
+    let staging_dir = cache_dir.with_extension("tmp");
+    if staging_dir.exists() {
+        if let Err(error) = fs::remove_dir_all(&staging_dir) {
+            println!(
+                "cargo:warning=Failed to remove incomplete SDK staging directory {}: {error}",
+                staging_dir.display()
+            );
+            return None;
+        }
+    }
+    if let Err(error) = fs::create_dir_all(&staging_dir) {
+        println!(
+            "cargo:warning=Failed to create SDK staging directory {}: {error}",
+            staging_dir.display()
+        );
+        return None;
+    }
+    Some(staging_dir)
+}
+
+fn try_download_curl(url: &str, dest: &Path) -> bool {
+    command_succeeded(
+        Command::new("curl")
+            .args(["-fsSL", "--retry", "3", "--retry-delay", "2", "-o"])
+            .arg(dest)
+            .arg("--url")
+            .arg(url),
+        "curl download",
+    )
+}
+
+fn try_download_wget(url: &str, dest: &Path) -> bool {
+    command_succeeded(
+        Command::new("wget")
+            .args(["--no-verbose", "--tries=3", "-O"])
+            .arg(dest)
+            .arg("--")
+            .arg(url),
+        "wget download",
+    )
+}
+
+fn try_download_powershell(url: &str, dest: &Path) -> bool {
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'; \
+         try {{ Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing \
+         -ErrorAction Stop; exit 0 }} \
+         catch {{ [Console]::Error.WriteLine($_); exit 1 }}",
+        url.replace('\'', "''"),
+        dest.to_string_lossy().replace('\'', "''")
+    );
+    command_succeeded(
+        Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]),
+        "PowerShell download",
+    )
 }
 
 fn extract_tarball(tar_path: &Path, dest_dir: &Path) -> bool {
     // Try tar (available on all platforms including modern Windows)
-    let output = Command::new("tar")
-        .args(["xzf", tar_path.to_str().unwrap_or_default(), "-C"])
-        .arg(dest_dir)
-        .output();
+    if command_succeeded(
+        Command::new("tar")
+            .arg("xzf")
+            .arg(tar_path)
+            .arg("-C")
+            .arg(dest_dir),
+        "tar extraction",
+    ) {
+        return true;
+    }
 
-    match output {
-        Ok(o) if o.status.success() => true,
-        _ => {
-            // Fallback: try powershell on Windows
-            let ps_output = Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    &format!(
-                        "tar xzf '{}' -C '{}'",
-                        tar_path.display(),
-                        dest_dir.display()
-                    ),
-                ])
-                .output();
-            matches!(ps_output, Ok(o) if o.status.success())
+    // Fallback: try powershell on Windows, propagating tar's exit code.
+    if cfg!(windows) {
+        let script = format!(
+            "$ErrorActionPreference = 'Stop'; \
+             & tar xzf '{}' -C '{}'; exit $LASTEXITCODE",
+            tar_path.to_string_lossy().replace('\'', "''"),
+            dest_dir.to_string_lossy().replace('\'', "''")
+        );
+        return command_succeeded(
+            Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]),
+            "PowerShell tar extraction",
+        );
+    }
+    false
+}
+
+fn command_succeeded(command: &mut Command, action: &str) -> bool {
+    match command.output() {
+        Ok(output) if output.status.success() => true,
+        Ok(output) => {
+            println!("cargo:warning={action} failed: {}", output.status);
+            // Prefix every diagnostic line so Cargo displays multiline tool
+            // errors instead of interpreting them as build-script directives.
+            for (stream, bytes) in [("stderr", &output.stderr), ("stdout", &output.stdout)] {
+                for line in String::from_utf8_lossy(bytes).lines() {
+                    if !line.trim().is_empty() {
+                        println!("cargo:warning={action} {stream}: {line}");
+                    }
+                }
+            }
+            false
+        }
+        Err(error) => {
+            println!("cargo:warning=Could not execute {action}: {error}");
+            false
         }
     }
 }

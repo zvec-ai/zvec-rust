@@ -127,6 +127,19 @@ The build script resolves the C library in this order:
 
 Set `ZVEC_AUTO_BUILD=0` to disable steps 5 and 6.
 
+### Prebuilt Downloads and Failure Handling
+
+Prebuilt SDKs remain cached at `$OUT_DIR/zvec-prebuilt`, under Cargo's `target`
+directory. Cleaning the corresponding build output removes this cache.
+Cache reuse requires successful extraction, the expected native library, and a
+completion marker; unmarked cache entries are downloaded again.
+
+Failed curl downloads fall back to wget, then PowerShell on Windows. Command
+failures report their exit status and diagnostics. Archives that fail extraction
+or lack the expected library are retained at the printed path until the next
+download attempt or clean. If all acquisition methods fail, the build script
+stops with an explicit error instead of deferring the failure to the linker.
+
 ## Quick Start
 
 ```rust

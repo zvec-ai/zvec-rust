@@ -39,9 +39,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.70"
+      # Native library resolution fails early, so this check acquires the bundled SDK.
       - run: cargo check --workspace --lib
-        env:
-          ZVEC_AUTO_BUILD: "0"
 
   check-and-test:
     name: Check & Test (${{ matrix.platform }})
