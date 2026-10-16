@@ -401,15 +401,12 @@ fn download_prebuilt(cache_dir: &Path) -> Option<PathBuf> {
         );
         return Some(cache_dir.to_path_buf());
     }
-    if cache_dir.exists() {
-        if let Err(error) = fs::remove_dir_all(cache_dir) {
-            println!(
-                "cargo:warning=Failed to remove incomplete prebuilt cache {}: {error}",
-                cache_dir.display()
-            );
-            return None;
-        }
-    }
+    // A cache without the completion marker (for example one written by an
+    // older build script) is not reused, but it is deliberately *not* deleted
+    // here: it may be the only copy of the SDK this machine has, and removing
+    // it before the replacement is verified would turn a transient download
+    // failure into a build that cannot succeed offline at all. It is replaced
+    // below, once the new download is extracted and validated.
 
     let target = env::var("TARGET").unwrap_or_default();
     let version = env::var("CARGO_PKG_VERSION").unwrap_or_default();
@@ -490,6 +487,19 @@ fn download_prebuilt(cache_dir: &Path) -> Option<PathBuf> {
     }
 
     // Publish the SDK only after extraction and library validation succeed.
+    // Any stale cache is dropped at this point and not earlier, so a failed
+    // download leaves the previous copy in place.
+    if cache_dir.exists() {
+        if let Err(error) = fs::remove_dir_all(cache_dir) {
+            println!(
+                "cargo:warning=Failed to replace stale prebuilt cache {}: {error}. \
+                 Download retained at {}",
+                cache_dir.display(),
+                staging_dir.display()
+            );
+            return None;
+        }
+    }
     if let Err(error) = fs::rename(&extracted_dir, cache_dir) {
         println!(
             "cargo:warning=Failed to publish prebuilt SDK at {}: {error}. \

@@ -157,7 +157,7 @@ mod build_script {
         }
 
         #[test]
-        fn unmarked_partial_cache_is_discarded_before_redownload() {
+        fn unmarked_partial_cache_is_replaced_by_a_verified_download() {
             let fixture = Fixture::new();
             fixture.successful_download("curl", "-o");
             fixture.successful_extraction();
@@ -175,6 +175,29 @@ mod build_script {
             );
             assert_eq!(fixture.log(), "curl\ntar\n");
             assert_eq!(fixture.cache_entries(), vec![cache_dir]);
+        }
+
+        #[test]
+        fn failed_download_preserves_an_existing_cache() {
+            let fixture = Fixture::new();
+            fixture.tool("curl", "printf 'curl\\n' >> \"$ZVEC_TEST_LOG\"\nexit 28");
+            fixture.tool("wget", "printf 'wget\\n' >> \"$ZVEC_TEST_LOG\"\nexit 4");
+            let cache_dir = fixture.cache_dir();
+            fs::create_dir_all(&cache_dir).unwrap();
+            fs::write(cache_dir.join("libzvec_c_api.so"), "legacy library").unwrap();
+            assert!(has_zvec_lib(&cache_dir));
+            assert!(!has_complete_prebuilt(&cache_dir));
+
+            assert!(download_prebuilt(&cache_dir).is_none());
+            // A cache written before completion markers existed is not reused,
+            // but a failed download must not delete it either: it may be the
+            // only copy of the SDK available offline.
+            assert_eq!(
+                fs::read_to_string(cache_dir.join("libzvec_c_api.so")).unwrap(),
+                "legacy library"
+            );
+            assert_eq!(fixture.cache_entries(), vec![cache_dir]);
+            assert_eq!(fixture.log(), "curl\nwget\n");
         }
 
         #[test]
