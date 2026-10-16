@@ -28,7 +28,8 @@
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + 测试 + 模糊测试 + 覆盖率 | |
 | **Linux (musl)** | x86_64 | ✅ 预编译 | Alpine/musl 发行版；在 `musllinux_1_2` 中构建，与上游 zvec 基线一致 |
 | **Linux (musl)** | ARM64 (AArch64) | ✅ 预编译 | Alpine/musl 发行版；在 `musllinux_1_2` 中构建 |
-| **Windows** | x86_64 (MSVC) | ✅ Clippy + 测试 | CMake + MSVC 工具链 |
+| **Windows** | x86_64 (MSVC) | ✅ 预编译 + Clippy + 测试 | CMake + MSVC 工具链 |
+| **Windows** | ARM64 (MSVC) | ✅ 预编译 | 在 `windows-11-arm` 上原生构建，与上游 zvec 使用相同的 runner 和 MSVC 架构 |
 
 > Linux gnu 预编译产物面向 glibc 2.28（`manylinux_2_28`，与上游 zvec 一致），
 > 可运行在 CentOS 8 / Ubuntu 20.04 及以上版本的 glibc 发行版；
@@ -38,6 +39,10 @@
 > v0.7.2 及之前的版本在 Apple Silicon 上标记为 macOS 14.0，且没有 Intel 产物。
 
 > 动态库文件名因平台而异：`libzvec_c_api.dylib`（macOS）、`libzvec_c_api.so`（Linux）、`zvec_c_api.dll`（Windows）。
+
+> Windows ARM64 预编译产物不含 RaBitQ 与 DiskANN：上游 zvec 将 RaBitQ 限定在
+> x86_64（其内核为 AVX2/AVX-512），Windows 的 DiskANN 后端同样只支持 x86_64，
+> 因此该目标上这两类索引不可用。
 
 ## 架构
 

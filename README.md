@@ -28,7 +28,8 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 | **Linux** | ARM64 (AArch64) | ✅ Clippy + Test + Fuzz + Coverage | |
 | **Linux (musl)** | x86_64 | ✅ Prebuilt | Alpine/musl distros; built in `musllinux_1_2`, same baseline as upstream zvec |
 | **Linux (musl)** | ARM64 (AArch64) | ✅ Prebuilt | Alpine/musl distros; built in `musllinux_1_2` |
-| **Windows** | x86_64 (MSVC) | ✅ Clippy + Test | CMake + MSVC toolchain |
+| **Windows** | x86_64 (MSVC) | ✅ Prebuilt + Clippy + Test | CMake + MSVC toolchain |
+| **Windows** | ARM64 (MSVC) | ✅ Prebuilt | Built natively on `windows-11-arm`, the runner and MSVC arch upstream zvec uses |
 
 > Linux gnu prebuilts target glibc 2.28 (`manylinux_2_28`, same as upstream
 > zvec), so they work on glibc distros as old as CentOS 8 / Ubuntu 20.04.
@@ -39,6 +40,11 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 > Silicon and shipped no Intel build.
 
 > The dynamic library name varies by platform: `libzvec_c_api.dylib` (macOS), `libzvec_c_api.so` (Linux), `zvec_c_api.dll` (Windows).
+
+> The Windows ARM64 prebuilt ships without RaBitQ and DiskANN: upstream zvec
+> gates RaBitQ on x86_64 (its kernels are AVX2/AVX-512) and its Windows
+> DiskANN backend on x86_64 too, so those index types are unavailable on that
+> target.
 
 ## Architecture
 

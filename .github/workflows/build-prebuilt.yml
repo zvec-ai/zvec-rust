@@ -67,6 +67,24 @@ jobs:
             os: windows-2025
             lib_name: zvec_c_api.dll
             container: ''
+            msvc_arch: x64
+            python_version: '3.10'
+            # PE machine field reported by `dumpbin -headers`, used by the
+            # architecture check below.
+            pe_machine: 8664
+          # Windows on ARM, built natively on GitHub's windows-11-arm runner:
+          # the same runner and MSVC arch upstream zvec uses for its
+          # windows-11-arm CI job (05-windows-build.yml). Python 3.11 because
+          # 3.10 has no official Windows-on-ARM build. Upstream takes ~57min
+          # for its full ARM64 build+test, so the 120min job timeout leaves
+          # plenty of headroom for our `zvec_c_api`-only build.
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+            lib_name: zvec_c_api.dll
+            container: ''
+            msvc_arch: arm64
+            python_version: '3.11'
+            pe_machine: AA64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     env:
@@ -82,9 +100,11 @@ jobs:
         if: runner.os != 'Windows'
         uses: mozilla-actions/sccache-action@v0.0.10
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.10'
+          # v7 matches upstream zvec and installs Python on the windows-11-arm
+          # runner; entries without an explicit pin keep the previous 3.10.
+          python-version: ${{ matrix.python_version || '3.10' }}
 
       # Linux builds run inside pinned pypa containers, aligned with upstream
       # zvec's _build_prebuilt.yml: manylinux_2_28 (glibc 2.28) for the gnu
@@ -174,6 +194,10 @@ jobs:
       - name: Setup MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
+        with:
+          # arm64 selects the native ARM64 toolchain on windows-11-arm; x64
+          # keeps the existing behaviour on the Intel runner.
+          arch: ${{ matrix.msvc_arch || 'x64' }}
 
       - name: Install CMake and Ninja (Windows)
         # Pin the same versions ci.yml uses; cmake 3.30.0 (not 4.x) avoids the
@@ -194,6 +218,22 @@ jobs:
           # tail link behaviour and stalled the build for hours.
           cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_C_BINDINGS=ON -G Ninja
           cmake --build . --config Release --parallel --target zvec_c_api
+        shell: pwsh
+
+      # Fail loudly if the DLL is not the architecture the target names — the
+      # Windows counterpart of the macOS `lipo` check above. `dumpbin` is on
+      # PATH once the MSVC environment step has run.
+      - name: Verify library architecture (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $dll = Get-ChildItem -Path vendor/zvec/build -Recurse -Filter zvec_c_api.dll | Select-Object -First 1
+          if (-not $dll) { Write-Error "zvec_c_api.dll not found under vendor/zvec/build"; exit 1 }
+          $headers = (dumpbin -headers $dll.FullName | Out-String)
+          $headers -split "`n" | Select-String -Pattern 'machine' | Select-Object -First 2
+          if ($headers -notmatch '${{ matrix.pe_machine }}') {
+            Write-Error "$($dll.FullName) is not a ${{ matrix.pe_machine }} binary"
+            exit 1
+          }
         shell: pwsh
 
       - name: Package library (Unix)
