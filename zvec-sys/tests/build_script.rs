@@ -24,6 +24,7 @@ mod build_script {
             "ZVEC_LIB_DIR",
             "ZVEC_INCLUDE_DIR",
             "ZVEC_AUTO_BUILD",
+            "ZVEC_REPO_URL",
             "DOCS_RS",
             "ZVEC_TEST_LOG",
         ];
@@ -232,13 +233,35 @@ mod build_script {
         }
 
         #[test]
-        fn missing_library_fails_in_the_build_script() {
-            let _fixture = Fixture::new();
-            let error = std::panic::catch_unwind(main).unwrap_err();
-            assert!(error
-                .downcast_ref::<String>()
-                .unwrap()
-                .contains("Could not find libzvec_c_api"));
+        fn failed_acquisition_fails_in_the_build_script() {
+            let fixture = Fixture::new();
+            // Request acquisition, but no download tool is on PATH and the
+            // clone URL is a local path, so nothing reaches the network.
+            env::set_var("ZVEC_AUTO_BUILD", "1");
+            env::set_var("ZVEC_REPO_URL", "/nonexistent/zvec.git");
+            if cfg!(feature = "bundled") {
+                let error = std::panic::catch_unwind(main).unwrap_err();
+                assert!(error
+                    .downcast_ref::<String>()
+                    .unwrap()
+                    .contains("every acquisition method failed"));
+            } else {
+                // Without the feature nothing can be acquired, so the script
+                // warns and leaves the failure to the linker.
+                main();
+            }
+            assert!(fixture.log().is_empty());
+        }
+
+        #[test]
+        fn disabled_acquisition_only_warns_in_the_build_script() {
+            let fixture = Fixture::new();
+            // `ZVEC_AUTO_BUILD=0` keeps the build hermetic: `cargo check`,
+            // `cargo doc` and `cargo publish` verification do not link, so a
+            // library the caller provides itself must not fail the script.
+            main();
+            assert!(fixture.log().is_empty());
+            assert!(!fixture.cache_dir().exists());
         }
 
         #[test]

@@ -133,7 +133,12 @@ make test-all     # 运行所有测试
 curl 下载失败会继续尝试 wget，Windows 下还会尝试 PowerShell。
 命令失败会输出退出状态及错误详情。解压失败或缺少预期库的压缩包
 会保留在输出路径，直到下一次下载尝试或清理构建产物。
-所有获取路径失败后，构建脚本会明确报错并停止，不再延迟到链接阶段。
+
+若已启用自动获取且所有方式都失败，构建脚本会明确报错并停止，不再延迟到链接阶段。
+自动获取由 `bundled` feature 启用，设置 `ZVEC_AUTO_BUILD=0` 可关闭。
+关闭时构建脚本只给出警告，因此 `cargo check`、`cargo doc` 和 `cargo publish`
+在自备库的环境下仍可正常工作，例如通过 `ZVEC_LIB_DIR` 或 `RUSTFLAGS`
+指向系统安装的 `libzvec_c_api`。
 
 ## 快速开始
 

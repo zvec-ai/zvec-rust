@@ -39,8 +39,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.70"
-      # Native library resolution fails early, so this check acquires the bundled SDK.
+      # ZVEC_AUTO_BUILD=0 keeps this check hermetic: no SDK download and no
+      # source build. A missing native library is then a warning rather than a
+      # build-script failure, and `cargo check` never links.
       - run: cargo check --workspace --lib
+        env:
+          ZVEC_AUTO_BUILD: "0"
 
   check-and-test:
     name: Check & Test (${{ matrix.platform }})

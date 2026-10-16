@@ -49,10 +49,25 @@ fn main() {
         &auto_build_dir,
     );
     if lib_dir.is_none() {
-        panic!(
-            "Could not find libzvec_c_api for {}. See the acquisition errors above. \
-             Set ZVEC_LIB_DIR to a directory containing the native library, \
-             or enable the bundled feature with ZVEC_AUTO_BUILD unset or set to 1.",
+        // Only fail the build when the script was allowed to acquire the
+        // library itself and every method failed. With acquisition disabled the
+        // caller is expected to supply the library (for example a system
+        // `libzvec_c_api` reached through `ZVEC_LIB_DIR` or `RUSTFLAGS`), and
+        // `cargo check`, `cargo doc` and `cargo publish` verification do not
+        // link, so a missing library stays a warning there.
+        if acquisition_enabled() {
+            panic!(
+                "Could not find libzvec_c_api for {} after every acquisition method failed. \
+                 See the acquisition errors above. Set ZVEC_LIB_DIR to a directory containing \
+                 the native library, place a sibling zvec/ checkout, or pre-build vendor/lib.",
+                env::var("TARGET").unwrap_or_default()
+            );
+        }
+        println!(
+            "cargo:warning=Could not find libzvec_c_api for {}. Native library acquisition is \
+             disabled (the `bundled` feature is off, or ZVEC_AUTO_BUILD=0). Set ZVEC_LIB_DIR, \
+             place a sibling zvec/ checkout, pre-build vendor/lib, or enable the bundled \
+             feature; linking an executable will fail until one of them resolves.",
             env::var("TARGET").unwrap_or_default()
         );
     }
@@ -140,20 +155,29 @@ fn resolve_lib_dir(
     }
 
     // 5. Reuse a cached SDK or download it from GitHub Release
-    if cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
+    if acquisition_enabled() {
         if let Some(dir) = download_prebuilt(prebuilt_cache_dir) {
             return Some(dir);
         }
     }
 
     // 6. Auto-build from source (fallback)
-    if cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0" {
+    if acquisition_enabled() {
         if let Some(dir) = auto_build_zvec(auto_build_dir) {
             return Some(dir);
         }
     }
 
     None
+}
+
+/// Whether the build script may acquire the native library itself: reuse or
+/// download a prebuilt SDK (step 5), then fall back to cloning and building
+/// zvec from source (step 6). Both require the `bundled` feature; the
+/// `ZVEC_AUTO_BUILD=0` escape hatch keeps builds hermetic for callers that
+/// provide the library themselves.
+fn acquisition_enabled() -> bool {
+    cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0"
 }
 
 fn resolve_include_dir(
