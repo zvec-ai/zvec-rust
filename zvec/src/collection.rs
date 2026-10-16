@@ -613,10 +613,67 @@ impl Collection {
     }
 
     /// Closes the collection explicitly.
+    ///
+    /// The native handle is released by [`Drop`], which reports a failed
+    /// `zvec_collection_close` only as a warning on stderr, so this always
+    /// returns `Ok(())`. Use [`Collection::try_close`] to observe a failed
+    /// close.
     pub fn close(self) -> Result<()> {
         // Drop will handle the close
         drop(self);
         Ok(())
+    }
+
+    /// Closes the collection explicitly and reports a failed close.
+    ///
+    /// Consumes the collection exactly like [`Collection::close`], but releases
+    /// the native handle here instead of leaving it to [`Drop`].
+    ///
+    /// `zvec_collection_close` releases its handle whether it succeeds or
+    /// fails — a failure only reports an exception raised while the handle was
+    /// being released — so the handle is gone on both paths and a second close
+    /// cannot be requested. Callers therefore get no handle back to retry with,
+    /// and the collection's data directory is left as the C library left it.
+    ///
+    /// Open iterators borrow the collection, so none can be alive at this
+    /// point; the C library then waits for the remaining handles before it
+    /// closes the collection itself.
+    ///
+    /// A null handle, reachable only through [`Collection::from_raw`], is
+    /// reported as [`ErrorCode::InvalidArgument`] rather than being ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever `zvec_collection_close` reported, together with the
+    /// message the C library stored for that failure.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use zvec_rust::*;
+    ///
+    /// # fn f(collection: Collection) -> Result<()> {
+    /// collection.try_close()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Consuming the collection is what keeps a second close out of reach:
+    ///
+    /// ```compile_fail
+    /// use zvec_rust::*;
+    ///
+    /// # fn f(collection: Collection) -> Result<()> {
+    /// collection.try_close()?;
+    /// collection.try_close()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn try_close(mut self) -> Result<()> {
+        // Release the handle exactly once: `Drop` skips a null handle, so
+        // clearing the field first turns the implicit close into a no-op.
+        let handle = std::mem::replace(&mut self.handle, ptr::null_mut());
+        check_error(unsafe { zvec_rust_sys::zvec_collection_close(handle) })
     }
 }
 
