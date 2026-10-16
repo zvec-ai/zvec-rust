@@ -229,9 +229,15 @@ jobs:
           $dll = Get-ChildItem -Path vendor/zvec/build -Recurse -Filter zvec_c_api.dll | Select-Object -First 1
           if (-not $dll) { Write-Error "zvec_c_api.dll not found under vendor/zvec/build"; exit 1 }
           $headers = (dumpbin -headers $dll.FullName | Out-String)
-          $headers -split "`n" | Select-String -Pattern 'machine' | Select-Object -First 2
-          if ($headers -notmatch '${{ matrix.pe_machine }}') {
-            Write-Error "$($dll.FullName) is not a ${{ matrix.pe_machine }} binary"
+          # Match the machine line itself -- "AA64 machine (ARM64)" or
+          # "8664 machine (x64)" -- instead of scanning the whole dump, where
+          # the bare hex token could also turn up in an unrelated size or
+          # offset field and let a wrong-architecture DLL pass.
+          $machine = ($headers -split "`n" | Where-Object { $_ -match 'machine \(' } | Select-Object -First 1)
+          if (-not $machine) { Write-Error "no machine line in the dumpbin output for $($dll.FullName)"; exit 1 }
+          $machine.Trim()
+          if ($machine -notmatch '${{ matrix.pe_machine }} machine') {
+            Write-Error "$($dll.FullName) is not a ${{ matrix.pe_machine }} binary: $($machine.Trim())"
             exit 1
           }
         shell: pwsh
