@@ -18,12 +18,14 @@ mod build_script {
             "TARGET",
             "CARGO_PKG_VERSION",
             "CARGO_CFG_TARGET_OS",
+            "CARGO_CFG_TARGET_ENV",
             "CARGO_MANIFEST_DIR",
             "OUT_DIR",
             "ZVEC_PREBUILT_URL",
             "ZVEC_LIB_DIR",
             "ZVEC_INCLUDE_DIR",
             "ZVEC_AUTO_BUILD",
+            "ZVEC_STRICT_LIB",
             "ZVEC_REPO_URL",
             "DOCS_RS",
             "ZVEC_TEST_LOG",
@@ -113,6 +115,23 @@ mod build_script {
                     .unwrap()
                     .map(|entry| entry.unwrap().path())
                     .collect()
+            }
+
+            /// A valid native library in the vendor directory the build script
+            /// resolves for this fixture, without being told about it.
+            fn install_vendor_library(&self) -> PathBuf {
+                let vendor_lib = self.root.join("workspace/vendor/lib");
+                fs::create_dir_all(&vendor_lib).unwrap();
+                fs::write(vendor_lib.join("libzvec_c_api.so"), "native library").unwrap();
+                vendor_lib
+            }
+
+            /// A valid native library directory to configure explicitly.
+            fn install_explicit_library(&self) -> PathBuf {
+                let lib_dir = self.root.join("native");
+                fs::create_dir_all(&lib_dir).unwrap();
+                fs::write(lib_dir.join("libzvec_c_api.so"), "native library").unwrap();
+                lib_dir
             }
         }
 
@@ -306,6 +325,261 @@ mod build_script {
                 Some(vendor_lib)
             );
             assert!(fixture.log().is_empty());
+        }
+
+        /// Text of a panic payload raised by the build script.
+        fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+            if let Some(message) = payload.downcast_ref::<String>() {
+                message.clone()
+            } else if let Some(message) = payload.downcast_ref::<&str>() {
+                (*message).to_string()
+            } else {
+                String::new()
+            }
+        }
+
+        #[test]
+        fn strict_mode_requires_an_explicit_library_directory() {
+            let fixture = Fixture::new();
+            env::set_var("ZVEC_STRICT_LIB", "1");
+            let vendor_lib = fixture.install_vendor_library();
+
+            let message = panic_message(std::panic::catch_unwind(main).unwrap_err());
+
+            assert!(message.contains("ZVEC_STRICT_LIB is set"));
+            assert!(message.contains("ZVEC_LIB_DIR is not set"));
+            assert!(message.contains("libzvec_c_api.so"));
+            // A substitute exists but was neither used nor touched, and nothing
+            // tried to download or build one.
+            assert!(!fixture.cache_dir().exists());
+            assert!(fixture.log().is_empty());
+            assert_eq!(
+                fs::read_to_string(vendor_lib.join("libzvec_c_api.so")).unwrap(),
+                "native library"
+            );
+            assert_eq!(
+                resolve_lib_dir(
+                    &None,
+                    &fixture.root.join("submodule"),
+                    &fixture.root.join("workspace/vendor"),
+                    &fixture.cache_dir(),
+                    &fixture.root.join("auto-build"),
+                ),
+                None
+            );
+        }
+
+        #[test]
+        fn strict_mode_rejects_an_incomplete_directory_and_never_falls_back() {
+            let fixture = Fixture::new();
+            env::set_var("ZVEC_STRICT_LIB", "1");
+            let vendor_lib = fixture.install_vendor_library();
+            let incomplete = fixture.root.join("incomplete");
+            fs::create_dir_all(&incomplete).unwrap();
+            fs::write(incomplete.join("libzvec_c_api.so.tmp"), "partial").unwrap();
+            env::set_var("ZVEC_LIB_DIR", &incomplete);
+
+            let message = panic_message(std::panic::catch_unwind(main).unwrap_err());
+
+            assert!(message.contains("ZVEC_STRICT_LIB is set"));
+            assert!(message.contains(&incomplete.display().to_string()));
+            assert!(!fixture.cache_dir().exists());
+            assert!(fixture.log().is_empty());
+            assert!(vendor_lib.join("libzvec_c_api.so").is_file());
+        }
+
+        #[test]
+        fn strict_mode_accepts_an_explicit_library_directory() {
+            let fixture = Fixture::new();
+            env::set_var("ZVEC_STRICT_LIB", "1");
+            let lib_dir = fixture.install_explicit_library();
+            env::set_var("ZVEC_LIB_DIR", &lib_dir);
+
+            main();
+
+            assert_eq!(
+                resolve_lib_dir(
+                    &None,
+                    &fixture.root.join("submodule"),
+                    &fixture.root.join("workspace/vendor"),
+                    &fixture.cache_dir(),
+                    &fixture.root.join("auto-build"),
+                ),
+                Some(lib_dir)
+            );
+            assert!(!fixture.cache_dir().exists());
+            assert!(fixture.log().is_empty());
+        }
+
+        #[test]
+        fn strict_mode_stays_off_for_every_other_value() {
+            let fixture = Fixture::new();
+            let vendor_lib = fixture.install_vendor_library();
+            let incomplete = fixture.root.join("incomplete");
+            fs::create_dir_all(&incomplete).unwrap();
+            env::set_var("ZVEC_LIB_DIR", &incomplete);
+
+            for value in ["", "0", "false", "no"] {
+                env::set_var("ZVEC_STRICT_LIB", value);
+                assert!(
+                    !strict_lib_dir_required(),
+                    "value {value:?} must not enable strict mode"
+                );
+                main();
+                assert_eq!(
+                    resolve_lib_dir(
+                        &None,
+                        &fixture.root.join("submodule"),
+                        &fixture.root.join("workspace/vendor"),
+                        &fixture.cache_dir(),
+                        &fixture.root.join("auto-build"),
+                    ),
+                    Some(vendor_lib.clone())
+                );
+            }
+            assert!(fixture.log().is_empty());
+        }
+
+        #[test]
+        fn strict_is_enabled_by_one_or_the_word_true_however_it_is_cased() {
+            // Held for its environment isolation and restored on drop; the
+            // assertions below read process environment, not fixture state.
+            let _fixture = Fixture::new();
+
+            for value in ["1", "true", "TRUE", "True"] {
+                env::set_var("ZVEC_STRICT_LIB", value);
+                assert!(
+                    strict_lib_dir_required(),
+                    "value {value:?} must enable strict mode"
+                );
+            }
+            // Values that read as "yes" in some other toolchains stay off, so the
+            // word this contract accepts is exactly `true`.
+            for value in ["yes", "on", "2", " true"] {
+                env::set_var("ZVEC_STRICT_LIB", value);
+                assert!(
+                    !strict_lib_dir_required(),
+                    "value {value:?} must not enable strict mode"
+                );
+            }
+        }
+
+        #[test]
+        fn strict_mode_keeps_the_jieba_dict_inside_the_configured_directory() {
+            let fixture = Fixture::new();
+            let explicit = fixture.install_explicit_library();
+
+            // A dictionary in the sibling checkout, which non-strict resolution
+            // takes.
+            let dict_suffix = Path::new("thirdparty")
+                .join("cppjieba")
+                .join("cppjieba-5.6.7")
+                .join("dict");
+            let sibling_dict = fixture.root.join("zvec").join(&dict_suffix);
+            fs::create_dir_all(&sibling_dict).unwrap();
+            fs::write(sibling_dict.join("jieba.dict.utf8"), "dict").unwrap();
+            fs::write(sibling_dict.join("hmm_model.utf8"), "model").unwrap();
+
+            let sibling = Some(fixture.root.join("zvec"));
+            let submodule = fixture.root.join("submodule");
+            let auto_build = fixture.root.join("auto-build");
+
+            // Non-strict: the sibling dictionary is used. Strict mode has to
+            // refuse exactly this, because that dictionary belongs to a different
+            // copy of the SDK than the configured library.
+            assert_eq!(
+                resolve_jieba_dict_dir(&sibling, &submodule, &auto_build, &explicit, false),
+                Some(sibling_dict)
+            );
+            // Strict: only the configured directory may supply it, and this one
+            // does not, so the crate registers no dictionary rather than one from
+            // another copy.
+            assert_eq!(
+                resolve_jieba_dict_dir(&sibling, &submodule, &auto_build, &explicit, true),
+                None
+            );
+        }
+
+        #[test]
+        fn the_expected_names_read_as_one_of_where_several_are_valid() {
+            // Held for its environment isolation and restored on drop.
+            let _fixture = Fixture::new();
+
+            env::set_var("CARGO_CFG_TARGET_OS", "linux");
+            assert_eq!(describe_expected_lib_file_names(), "libzvec_c_api.so");
+
+            env::set_var("CARGO_CFG_TARGET_OS", "windows");
+            env::set_var("CARGO_CFG_TARGET_ENV", "gnu");
+            assert_eq!(
+                describe_expected_lib_file_names(),
+                "one of libzvec_c_api.dll.a, zvec_c_api.lib, zvec_c_api.dll"
+            );
+            let message = strict_lib_failure_message(None);
+            assert!(
+                message.contains("one of libzvec_c_api.dll.a, zvec_c_api.lib, zvec_c_api.dll"),
+                "the message must not read as if every name were required: {message}"
+            );
+
+            // MSVC accepts exactly one artifact, so it reads as a plain name.
+            env::set_var("CARGO_CFG_TARGET_ENV", "msvc");
+            assert_eq!(describe_expected_lib_file_names(), "zvec_c_api.lib");
+        }
+
+        #[test]
+        fn strict_mode_never_reaches_acquisition() {
+            let fixture = Fixture::new();
+            env::set_var("ZVEC_STRICT_LIB", "1");
+            // Acquisition is enabled and both a working download path and a
+            // substitute that would otherwise resolve are in place; the clone
+            // URL keeps a wrong implementation offline instead of fetching a
+            // real repository.
+            env::set_var("ZVEC_AUTO_BUILD", "1");
+            env::set_var("ZVEC_REPO_URL", "/nonexistent/zvec.git");
+            fixture.successful_download("curl", "-o");
+            fixture.successful_extraction();
+            fixture.install_vendor_library();
+
+            let message = panic_message(std::panic::catch_unwind(main).unwrap_err());
+
+            assert!(message.contains("ZVEC_STRICT_LIB is set"));
+            assert!(!message.contains("every acquisition method failed"));
+            // No download tool ran, nothing was published, and no source
+            // checkout was created.
+            assert!(fixture.log().is_empty());
+            assert!(!fixture.cache_dir().exists());
+            assert!(!fixture.root.join("out/zvec-build/zvec").exists());
+        }
+
+        #[test]
+        fn platform_library_names_are_honoured() {
+            let fixture = Fixture::new();
+            let lib_dir = fixture.root.join("native");
+            fs::create_dir(&lib_dir).unwrap();
+
+            // Linux, the fixture default.
+            assert_eq!(expected_lib_file_names(), &["libzvec_c_api.so"]);
+
+            env::set_var("CARGO_CFG_TARGET_OS", "macos");
+            assert_eq!(expected_lib_file_names(), &["libzvec_c_api.dylib"]);
+            assert!(!has_zvec_lib(&lib_dir));
+            fs::write(lib_dir.join("libzvec_c_api.dylib"), "native library").unwrap();
+            assert!(has_zvec_lib(&lib_dir));
+
+            env::set_var("CARGO_CFG_TARGET_OS", "windows");
+            env::set_var("CARGO_CFG_TARGET_ENV", "msvc");
+            assert_eq!(expected_lib_file_names(), &["zvec_c_api.lib"]);
+            assert!(!has_zvec_lib(&lib_dir));
+
+            env::set_var("CARGO_CFG_TARGET_ENV", "gnu");
+            assert_eq!(
+                expected_lib_file_names(),
+                &["libzvec_c_api.dll.a", "zvec_c_api.lib", "zvec_c_api.dll"]
+            );
+            fs::write(lib_dir.join("zvec_c_api.dll"), "native library").unwrap();
+            assert!(has_zvec_lib(&lib_dir));
+
+            env::set_var("CARGO_CFG_TARGET_OS", "linux");
+            assert_eq!(expected_lib_file_names(), &["libzvec_c_api.so"]);
         }
 
         #[test]

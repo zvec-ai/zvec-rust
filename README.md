@@ -133,6 +133,45 @@ The build script resolves the C library in this order:
 
 Set `ZVEC_AUTO_BUILD=0` to disable steps 5 and 6.
 
+### Strict External Library Mode
+
+`ZVEC_STRICT_LIB=1` requires the native library to come from an explicitly
+configured `ZVEC_LIB_DIR` and disables every substitute:
+
+1. `ZVEC_LIB_DIR` must be set and must contain the platform library:
+   `libzvec_c_api.so` on Linux, `libzvec_c_api.dylib` on macOS/iOS, and the
+   import library (`zvec_c_api.lib` for MSVC, or one of `libzvec_c_api.dll.a`,
+   the import library, or the DLL for MinGW) on Windows.
+2. Steps 2–6 above are skipped: no sibling checkout, no submodule, no vendor
+   directory, no cached or downloaded prebuilt SDK, and no source build.
+3. A missing, invalid or incomplete `ZVEC_LIB_DIR` fails the build script with
+   the expected file name and target instead of falling back to another copy.
+
+The cppjieba dictionary the `jieba` FTS tokenizer needs follows the library: in
+strict mode it must come from the configured directory (`data/jieba_dict` next to
+the library, or `<prefix>/data/jieba_dict`), never from a sibling checkout or the
+submodule, because that dictionary belongs to a different copy of the SDK.
+
+Use it when a build must link exactly the library the environment provides —
+reproducible packaging, auditing, or offline builds — and a silent fallback to a
+different copy would be a defect. Because the failure is raised when the build
+script runs, `cargo check` fails as well while strict mode is on and the library
+is absent.
+
+The mode is opt-in, and only `1` or the word `true` enable it; `true` is matched
+case-insensitively (`TRUE`, `True`), because those are plainly the same word, and
+every other value — including an empty one and the `yes`/`on` that other
+toolchains accept — keeps the resolution order and behavior above unchanged.
+`DOCS_RS` builds still skip native library resolution entirely, because they do
+not link.
+
+Strict mode constrains the library and its dictionary, not the include path:
+`ZVEC_INCLUDE_DIR` resolution is unchanged, so a strict build can still take its
+headers from a sibling checkout or the submodule. That decides what downstream
+build scripts see rather than what the linker uses, which is why it is not part
+of this mode — set `ZVEC_INCLUDE_DIR` explicitly when the headers have to be
+pinned to the same directory.
+
 ### Prebuilt Downloads and Failure Handling
 
 Prebuilt SDKs remain cached at `$OUT_DIR/zvec-prebuilt`, under Cargo's `target`

@@ -11,6 +11,7 @@ fn main() {
         "ZVEC_LIB_DIR",
         "ZVEC_INCLUDE_DIR",
         "ZVEC_AUTO_BUILD",
+        "ZVEC_STRICT_LIB",
         "ZVEC_REPO_URL",
         "ZVEC_PREBUILT_URL",
         "DOCS_RS",
@@ -49,6 +50,15 @@ fn main() {
         &auto_build_dir,
     );
     if lib_dir.is_none() {
+        // A strict build accepts no substitute, so the explicit configuration
+        // was the only thing that could have resolved: report what is missing
+        // instead of letting the acquisition settings decide the outcome.
+        if strict_lib_dir_required() {
+            panic!(
+                "{}",
+                strict_lib_failure_message(env::var_os("ZVEC_LIB_DIR").map(PathBuf::from))
+            );
+        }
         // Only fail the build when the script was allowed to acquire the
         // library itself and every method failed. With acquisition disabled the
         // caller is expected to supply the library (for example a system
@@ -100,9 +110,13 @@ fn main() {
     // near the resolved library so the high-level crate can auto-register the
     // default jieba dict dir for the `jieba` FTS tokenizer.
     if let Some(ref dir) = lib_dir {
-        if let Some(jieba_dir) =
-            resolve_jieba_dict_dir(&sibling_zvec, &submodule_zvec, &auto_build_dir, dir)
-        {
+        if let Some(jieba_dir) = resolve_jieba_dict_dir(
+            &sibling_zvec,
+            &submodule_zvec,
+            &auto_build_dir,
+            dir,
+            strict_lib_dir_required(),
+        ) {
             println!(
                 "cargo:rustc-env=ZVEC_RUST_JIEBA_DICT_DIR={}",
                 jieba_dir.display()
@@ -121,17 +135,30 @@ fn resolve_lib_dir(
     prebuilt_cache_dir: &Path,
     auto_build_dir: &Path,
 ) -> Option<PathBuf> {
+    let strict = strict_lib_dir_required();
+
     // 1. Environment variable (highest priority — for advanced users)
     if let Some(custom) = env::var_os("ZVEC_LIB_DIR") {
         let path = PathBuf::from(&custom);
         if has_zvec_lib(&path) {
             return Some(path);
         }
-        println!(
-            "cargo:warning=ZVEC_LIB_DIR={} does not contain the required native library; \
-             continuing library resolution.",
-            path.display()
-        );
+        if !strict {
+            println!(
+                "cargo:warning=ZVEC_LIB_DIR={} does not contain the required native library; \
+                 continuing library resolution.",
+                path.display()
+            );
+        }
+    }
+
+    // Everything below substitutes another copy of the native library for the
+    // configured one: a sibling checkout, the submodule, the vendor directory,
+    // a cached or downloaded prebuilt SDK, or a source build. A strict build
+    // forbids exactly that, so it stops here and leaves the reporting to the
+    // caller, which knows whether the configuration was explicit.
+    if strict {
+        return None;
     }
 
     // 2. Sibling zvec checkout
@@ -180,6 +207,41 @@ fn acquisition_enabled() -> bool {
     cfg!(feature = "bundled") && env::var("ZVEC_AUTO_BUILD").unwrap_or_default() != "0"
 }
 
+/// Whether the build script must use the explicitly configured native library
+/// and nothing else.
+///
+/// Opt in with `ZVEC_STRICT_LIB=1` (`true` is accepted as well). Every other
+/// value, including an empty one, leaves the resolution order unchanged, so the
+/// mode cannot be enabled by accident.
+fn strict_lib_dir_required() -> bool {
+    let value = env::var("ZVEC_STRICT_LIB").unwrap_or_default();
+    value == "1" || value.eq_ignore_ascii_case("true")
+}
+
+/// Explains why a strict build could not resolve the configured native
+/// library.
+fn strict_lib_failure_message(configured: Option<PathBuf>) -> String {
+    let target = env::var("TARGET").unwrap_or_default();
+    let expected = describe_expected_lib_file_names();
+    let no_fallback = "A strict build never falls back to a sibling zvec/ checkout, the \
+                       submodule, the vendor directory, a cached or downloaded prebuilt SDK, or \
+                       a source build.";
+    match configured {
+        Some(dir) => format!(
+            "ZVEC_STRICT_LIB is set, but ZVEC_LIB_DIR={} does not contain the native library for \
+             {target}: expected {expected}. {no_fallback} Point ZVEC_LIB_DIR at a directory that \
+             contains {expected}, or unset ZVEC_STRICT_LIB to use the normal resolution order.",
+            dir.display()
+        ),
+        None => format!(
+            "ZVEC_STRICT_LIB is set, but ZVEC_LIB_DIR is not set. The native library for {target} \
+             must be configured explicitly, in a directory that contains {expected}. \
+             {no_fallback} Set ZVEC_LIB_DIR, or unset ZVEC_STRICT_LIB to use the normal \
+             resolution order."
+        ),
+    }
+}
+
 fn resolve_include_dir(
     sibling_zvec: &Option<PathBuf>,
     submodule_zvec: &Path,
@@ -216,25 +278,41 @@ fn resolve_include_dir(
     None
 }
 
-fn has_zvec_lib(dir: &Path) -> bool {
+/// Names of the native library files the linker can use for the current
+/// target.
+fn expected_lib_file_names() -> &'static [&'static str] {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     match target_os.as_str() {
-        "macos" | "ios" => dir.join("libzvec_c_api.dylib").is_file(),
+        "macos" | "ios" => &["libzvec_c_api.dylib"],
         "windows" => {
             // MSVC dynamic linking requires the .lib import library; the .dll
             // alone is not enough for the linker. The GNU/MinGW toolchain can
             // link directly against the .dll (or a .dll.a import lib).
             let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
             if target_env == "msvc" {
-                dir.join("zvec_c_api.lib").is_file()
+                &["zvec_c_api.lib"]
             } else {
-                dir.join("libzvec_c_api.dll.a").is_file()
-                    || dir.join("zvec_c_api.lib").is_file()
-                    || dir.join("zvec_c_api.dll").is_file()
+                &["libzvec_c_api.dll.a", "zvec_c_api.lib", "zvec_c_api.dll"]
             }
         }
-        _ => dir.join("libzvec_c_api.so").is_file(),
+        _ => &["libzvec_c_api.so"],
     }
+}
+
+/// The expected library names as a phrase the linker's rule matches: one name
+/// where the platform accepts one artifact, and "one of a, b, c" where it
+/// accepts several, so the message cannot read as if all of them are required.
+fn describe_expected_lib_file_names() -> String {
+    match expected_lib_file_names() {
+        [only] => (*only).to_owned(),
+        several => format!("one of {}", several.join(", ")),
+    }
+}
+
+fn has_zvec_lib(dir: &Path) -> bool {
+    expected_lib_file_names()
+        .iter()
+        .any(|name| dir.join(name).is_file())
 }
 
 fn auto_build_zvec(build_dir: &Path) -> Option<PathBuf> {
@@ -656,25 +734,34 @@ fn num_cpus() -> String {
 ///      (`<prefix>/lib` + `<prefix>/data`, as produced by zvec's CMake install).
 ///   3. The `thirdparty/cppjieba` dict of a sibling / submodule / auto-built
 ///      zvec source checkout.
+///
+/// A strict build stops after the first two. A dictionary taken from a sibling
+/// checkout or the submodule belongs to a different copy of the SDK than the
+/// configured library, which is the substitution strict mode exists to refuse;
+/// the dictionary is part of the SDK's own layout, so the configured directory
+/// has to provide it the same way it provides the library.
 fn resolve_jieba_dict_dir(
     sibling_zvec: &Option<PathBuf>,
     submodule_zvec: &Path,
     auto_build_dir: &Path,
     lib_dir: &Path,
+    strict: bool,
 ) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = vec![
         lib_dir.join("data").join("jieba_dict"),
         lib_dir.join("..").join("data").join("jieba_dict"),
     ];
-    let dict_suffix = Path::new("thirdparty")
-        .join("cppjieba")
-        .join("cppjieba-5.6.7")
-        .join("dict");
-    if let Some(ref sibling) = sibling_zvec {
-        candidates.push(sibling.join(&dict_suffix));
+    if !strict {
+        let dict_suffix = Path::new("thirdparty")
+            .join("cppjieba")
+            .join("cppjieba-5.6.7")
+            .join("dict");
+        if let Some(sibling) = sibling_zvec {
+            candidates.push(sibling.join(&dict_suffix));
+        }
+        candidates.push(submodule_zvec.join(&dict_suffix));
+        candidates.push(auto_build_dir.join("zvec").join(&dict_suffix));
     }
-    candidates.push(submodule_zvec.join(&dict_suffix));
-    candidates.push(auto_build_dir.join("zvec").join(&dict_suffix));
 
     candidates.into_iter().find(|c| has_jieba_dict(c))
 }
