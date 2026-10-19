@@ -250,17 +250,9 @@ jobs:
           cp "$ZVEC_LIB_DIR/${{ matrix.lib_name }}" dist/
           # Also copy any symlinks or versioned libraries
           find "$ZVEC_LIB_DIR" -name 'libzvec_c_api*' -exec cp -P {} dist/ \; 2>/dev/null || true
-          # Bundle cppjieba's dictionary files so the `jieba` FTS tokenizer
-          # works out of the box (same layout as the upstream zvec SDK:
-          # data/jieba_dict next to the library).
-          mkdir -p dist/data/jieba_dict
-          cp vendor/zvec/thirdparty/cppjieba/cppjieba-5.6.7/dict/jieba.dict.utf8 \
-             vendor/zvec/thirdparty/cppjieba/cppjieba-5.6.7/dict/hmm_model.utf8 \
-             dist/data/jieba_dict/
           echo "${{ matrix.target }}" > dist/TARGET
           tar czf zvec-prebuilt-${{ matrix.target }}.tar.gz -C dist .
           ls -lh zvec-prebuilt-${{ matrix.target }}.tar.gz
-          ls -l dist/data/jieba_dict
         shell: bash
 
       - name: Package library (Windows)
@@ -272,17 +264,9 @@ jobs:
           find vendor/zvec/build -name 'zvec_c_api.lib' -exec cp {} dist/ \; 2>/dev/null || true
           find vendor/zvec/build -name 'zvec_c_api.dll' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
           find vendor/zvec/build -name 'zvec_c_api.lib' -path '*/Release/*' -exec cp {} dist/ \; 2>/dev/null || true
-          # Bundle cppjieba's dictionary files so the `jieba` FTS tokenizer
-          # works out of the box (same layout as the upstream zvec SDK:
-          # data/jieba_dict next to the library).
-          mkdir -p dist/data/jieba_dict
-          cp vendor/zvec/thirdparty/cppjieba/cppjieba-5.6.7/dict/jieba.dict.utf8 \
-             vendor/zvec/thirdparty/cppjieba/cppjieba-5.6.7/dict/hmm_model.utf8 \
-             dist/data/jieba_dict/
           echo "${{ matrix.target }}" > dist/TARGET
           tar czf zvec-prebuilt-${{ matrix.target }}.tar.gz -C dist .
           ls -lh zvec-prebuilt-${{ matrix.target }}.tar.gz
-          ls -l dist/data/jieba_dict
         shell: bash
 
       - name: Upload artifact

@@ -96,21 +96,6 @@ fn main() {
         }
     }
 
-    // Discover the cppjieba dict directory (jieba.dict.utf8 + hmm_model.utf8)
-    // near the resolved library so the high-level crate can auto-register the
-    // default jieba dict dir for the `jieba` FTS tokenizer.
-    if let Some(ref dir) = lib_dir {
-        if let Some(jieba_dir) =
-            resolve_jieba_dict_dir(&sibling_zvec, &submodule_zvec, &auto_build_dir, dir)
-        {
-            println!(
-                "cargo:rustc-env=ZVEC_RUST_JIEBA_DICT_DIR={}",
-                jieba_dir.display()
-            );
-            println!("cargo:rerun-if-changed={}", jieba_dir.display());
-        }
-    }
-
     println!("cargo:rustc-link-lib=dylib=zvec_c_api");
 }
 
@@ -645,40 +630,4 @@ fn num_cpus() -> String {
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|| "2".to_string())
-}
-
-/// Locates the cppjieba dictionary directory for the resolved zvec library.
-///
-/// Candidates, in priority order:
-///   1. `lib_dir/data/jieba_dict` — prebuilt package layout (the release
-///      tarball ships the dict next to the shared library).
-///   2. `lib_dir/../data/jieba_dict` — native SDK install prefix layout
-///      (`<prefix>/lib` + `<prefix>/data`, as produced by zvec's CMake install).
-///   3. The `thirdparty/cppjieba` dict of a sibling / submodule / auto-built
-///      zvec source checkout.
-fn resolve_jieba_dict_dir(
-    sibling_zvec: &Option<PathBuf>,
-    submodule_zvec: &Path,
-    auto_build_dir: &Path,
-    lib_dir: &Path,
-) -> Option<PathBuf> {
-    let mut candidates: Vec<PathBuf> = vec![
-        lib_dir.join("data").join("jieba_dict"),
-        lib_dir.join("..").join("data").join("jieba_dict"),
-    ];
-    let dict_suffix = Path::new("thirdparty")
-        .join("cppjieba")
-        .join("cppjieba-5.6.7")
-        .join("dict");
-    if let Some(ref sibling) = sibling_zvec {
-        candidates.push(sibling.join(&dict_suffix));
-    }
-    candidates.push(submodule_zvec.join(&dict_suffix));
-    candidates.push(auto_build_dir.join("zvec").join(&dict_suffix));
-
-    candidates.into_iter().find(|c| has_jieba_dict(c))
-}
-
-fn has_jieba_dict(dir: &Path) -> bool {
-    dir.join("jieba.dict.utf8").is_file() && dir.join("hmm_model.utf8").is_file()
 }

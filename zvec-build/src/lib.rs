@@ -24,10 +24,9 @@
 //!    `cargo:rustc-link-arg`, which applies to every linked target kind of the
 //!    calling package — binaries, integration tests, examples, and benches — so
 //!    `cargo test` also runs without any dylib search-path environment vars.
-//! 2. Stages the shared library (and, when present, the `data/jieba_dict`
-//!    directory the FTS `jieba` tokenizer discovers relative to the loaded
-//!    library) next to the built artifacts in `target/<profile>/` so
-//!    `./target/<profile>/<exe>` runs with no environment variables set.
+//! 2. Stages the shared library next to the built artifacts in
+//!    `target/<profile>/` so `./target/<profile>/<exe>` runs with no
+//!    environment variables set.
 //!
 //! On Windows there is no rpath; the loader searches the executable's own
 //! directory, so step 2 (staging the DLL beside the executable) is what makes
@@ -86,22 +85,12 @@ pub fn runtime_lib_file_names(os: &str) -> &'static [&'static str] {
     }
 }
 
-/// Relative path (from the shared library's directory) of the cppjieba dict
-/// directory that the FTS `jieba` tokenizer discovers at runtime, and the two
-/// files it must contain.
-const JIEBA_DICT_SUBDIR: [&str; 2] = ["data", "jieba_dict"];
-const JIEBA_DICT_FILES: [&str; 2] = ["jieba.dict.utf8", "hmm_model.utf8"];
-
 /// Copies the runtime assets from the resolved [`lib_dir`] into `dst_dir`,
 /// creating directories as needed. Returns the destination paths that were
 /// written. A no-op returning an empty vec when the library cannot be located.
 ///
 /// Staged assets:
 /// - the runtime shared library ([`runtime_lib_file_names`]);
-/// - the `data/jieba_dict` directory, when present next to the library, so the
-///   FTS `jieba` tokenizer's runtime discovery (`<lib_dir>/data/jieba_dict`,
-///   located via `dladdr` / `GetModuleHandleEx`) also succeeds in a
-///   self-contained deployment.
 ///
 /// # Errors
 /// Returns any I/O error from creating a directory or copying a file.
@@ -119,7 +108,6 @@ pub fn copy_runtime_libs_to(dst_dir: &Path) -> io::Result<Vec<PathBuf>> {
             copied.push(destination);
         }
     }
-    copied.extend(copy_jieba_dict(&source_dir, dst_dir)?);
     Ok(copied)
 }
 
@@ -145,26 +133,6 @@ fn is_same_file(a: &Path, b: &Path) -> bool {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
     }
-}
-
-/// Stages the `data/jieba_dict` directory from `source_dir` into `dst_dir`,
-/// preserving the relative layout the runtime discovery expects. No-op (empty
-/// vec) when the dict is not shipped alongside the library.
-fn copy_jieba_dict(source_dir: &Path, dst_dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let subdir: PathBuf = JIEBA_DICT_SUBDIR.iter().collect();
-    let dict_src = source_dir.join(&subdir);
-    if !JIEBA_DICT_FILES.iter().all(|f| dict_src.join(f).is_file()) {
-        return Ok(Vec::new());
-    }
-    let dict_dst = dst_dir.join(&subdir);
-    fs::create_dir_all(&dict_dst)?;
-    let mut copied = Vec::new();
-    for name in JIEBA_DICT_FILES {
-        let destination = dict_dst.join(name);
-        stage_file(&dict_src.join(name), &destination)?;
-        copied.push(destination);
-    }
-    Ok(copied)
 }
 
 /// Directory that holds the crate's built binaries (`target/<profile>/`, or

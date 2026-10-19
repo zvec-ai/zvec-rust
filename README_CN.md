@@ -16,7 +16,7 @@
 - **完善的错误处理** — 所有 FFI 调用返回 `Result<T>`，包含详细错误码
 - **尽可能零拷贝** — 最小化 FFI 边界的数据拷贝
 - **预编译库支持** — 自动从 GitHub Releases 下载预编译的 `libzvec_c_api`；高阶用户可通过 `ZVEC_LIB_DIR` 覆盖
-- **FTS jieba 开箱即用** — 预编译包内置 cppjieba 词表（`data/jieba_dict`）；`initialize` 自动发现词表并注册默认 jieba 词表目录，中文全文检索零配置
+- **FTS jieba 开箱即用** — `libzvec_c_api` 内嵌 cppjieba 默认词表与 HMM 模型（LZ4 压缩），`jieba` 分词器不再依赖磁盘上的词表文件，也无需注册步骤
 
 ## 支持的平台
 
@@ -242,8 +242,6 @@ cargo run --example vector_search
 | `shutdown()` | 释放所有资源 |
 | `version()` | 获取版本字符串 |
 | `is_initialized()` | 检查初始化状态 |
-| `set_default_jieba_dict_dir(dir)` | 设置进程级默认 jieba 词表目录（供 FTS `jieba` 分词器使用） |
-| `get_default_jieba_dict_dir()` | 获取当前默认 jieba 词表目录（未设置时为 `""`） |
 | `io_backend_type()` / `io_backend_type_name(code)` | 当前 DiskAnn I/O 后端类型码及名称（`io_uring`、`libaio`、`pread`、`windows_overlapped`） |
 | `io_backend_description()` | 当前 I/O 后端的可读描述 |
 
@@ -260,13 +258,12 @@ initialize(Some(&config))?;
 
 #### jieba 分词器词表
 
-FTS `jieba` 分词器需要 cppjieba 的词表文件（`jieba.dict.utf8` 与
-`hmm_model.utf8`）。预编译库已将词表放在 `libzvec_c_api` 同级的
-`data/jieba_dict` 目录下，`initialize` 会自动发现该目录并通过
-`zvec_set_default_jieba_dict_dir` 注册 —— 中文全文检索无需任何额外配置：
+`libzvec_c_api` 已内嵌 cppjieba 的默认词表与 HMM 模型（LZ4 压缩），
+FTS `jieba` 分词器直接从库中读取 —— 中文全文检索既不需要磁盘上的
+词表文件，也不需要任何额外配置：
 
 ```rust
-initialize(None)?; // 自动发现并注册 jieba 词表
+initialize(None)?;
 
 let schema = CollectionSchema::builder("articles")
     .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
@@ -275,12 +272,14 @@ let schema = CollectionSchema::builder("articles")
     .build()?;
 ```
 
-如需自定义词表位置，可通过以下任一方式覆盖：
+如需改用自定义词表，可设置以下任一项（按优先级从高到低），
+目录中需包含 `jieba.dict.utf8` 与 `hmm_model.utf8`：
 
-- `ConfigBuilder::new().jieba_dict_dir("/path/to/jieba_dict")` —— 随 `initialize` 生效（优先级最高）
-- `set_default_jieba_dict_dir("/path/to/jieba_dict")` —— 进程级默认值
-- `ZVEC_JIEBA_DICT_DIR` 环境变量 —— 由 zvec 库在查询时读取
 - 字段级 `extra_params` JSON 中的 `"jieba_dict_dir"` —— 按索引生效
+- `ZVEC_JIEBA_DICT_DIR` 环境变量 —— 进程级，分词器初始化时读取
+
+`user_dict_path` 这个 extra param 会在已选定的词表（含内嵌默认词表）
+之上追加词条。
 
 ### Schema 定义
 

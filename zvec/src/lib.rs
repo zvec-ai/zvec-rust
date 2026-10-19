@@ -50,9 +50,8 @@ pub use collection::{
     WriteResult,
 };
 pub use config::{
-    get_default_jieba_dict_dir, initialize, io_backend_description, io_backend_type,
-    io_backend_type_name, is_initialized, set_default_jieba_dict_dir, shutdown, version,
-    ConfigBuilder,
+    initialize, io_backend_description, io_backend_type, io_backend_type_name, is_initialized,
+    shutdown, version, ConfigBuilder,
 };
 pub use doc::Doc;
 pub use error::{Error, ErrorCode, Result};

@@ -1,10 +1,11 @@
-//! End-to-end test for the `jieba` FTS tokenizer and the auto-registration
-//! of the default jieba dict directory.
+//! End-to-end test for the `jieba` FTS tokenizer.
 //!
-//! The zvec prebuilt packages ship cppjieba's dictionary under
-//! `data/jieba_dict`; `initialize` must discover it and register it via
-//! `zvec_set_default_jieba_dict_dir` so Chinese full-text search works
-//! without any extra configuration.
+//! zvec embeds cppjieba's default dictionary and HMM model (LZ4-compressed)
+//! in `libzvec_c_api`, so Chinese full-text search needs no dict directory
+//! to ship, discover, or register: `initialize(None)` plus
+//! `IndexParams::fts(Some("jieba"), ..)` is enough. A custom dictionary can
+//! still be selected per field through the `jieba_dict_dir` extra param, or
+//! process-wide through the `ZVEC_JIEBA_DICT_DIR` environment variable.
 //!
 //! Requires the zvec C library (`libzvec_c_api`). Set `ZVEC_LIB_DIR` before
 //! running. Run with: `cargo test --test jieba_fts_test`
@@ -21,38 +22,8 @@ fn ensure_initialized() {
 }
 
 #[test]
-fn initialize_auto_registers_default_jieba_dict_dir() {
-    ensure_initialized();
-
-    let dir = get_default_jieba_dict_dir();
-    if dir.is_empty() {
-        // Soft check: discovery depends on the dict shipping with the
-        // resolved zvec library (e.g. prebuilt assets published before the
-        // jieba dict was packaged do not have it).
-        eprintln!("skipping: no jieba dict discovered next to libzvec_c_api");
-        return;
-    }
-    let path = std::path::Path::new(&dir);
-    assert!(
-        path.join("jieba.dict.utf8").is_file(),
-        "missing jieba.dict.utf8 in {}",
-        dir
-    );
-    assert!(
-        path.join("hmm_model.utf8").is_file(),
-        "missing hmm_model.utf8 in {}",
-        dir
-    );
-}
-
-#[test]
 fn jieba_tokenizer_search_chinese_text() {
     ensure_initialized();
-
-    if get_default_jieba_dict_dir().is_empty() {
-        eprintln!("skipping: no jieba dict discovered next to libzvec_c_api");
-        return;
-    }
 
     let tmp_dir = tempfile::tempdir().unwrap();
     let dir = tmp_dir.path().join("zvec_jieba");
