@@ -223,6 +223,10 @@ pub enum QuantizeType {
     Int4 = 3,
     /// RaBitQ quantization.
     Rabitq = 4,
+    /// Product quantization (PQ), optionally with learned OPQ rotation.
+    ///
+    /// Configure it with [`crate::schema::IndexParams::set_quantizer_pq`].
+    Pq = 8,
 }
 
 impl From<u32> for QuantizeType {
@@ -232,6 +236,7 @@ impl From<u32> for QuantizeType {
             2 => QuantizeType::Int8,
             3 => QuantizeType::Int4,
             4 => QuantizeType::Rabitq,
+            8 => QuantizeType::Pq,
             _ => QuantizeType::Undefined,
         }
     }
@@ -540,11 +545,13 @@ mod tests {
         assert_eq!(QuantizeType::from(2), QuantizeType::Int8);
         assert_eq!(QuantizeType::from(3), QuantizeType::Int4);
         assert_eq!(QuantizeType::from(4), QuantizeType::Rabitq);
+        assert_eq!(QuantizeType::from(8), QuantizeType::Pq);
     }
 
     #[test]
     fn quantize_type_from_u32_unknown() {
         assert_eq!(QuantizeType::from(5), QuantizeType::Undefined);
+        assert_eq!(QuantizeType::from(7), QuantizeType::Undefined);
         assert_eq!(QuantizeType::from(99), QuantizeType::Undefined);
     }
 
@@ -556,6 +563,7 @@ mod tests {
             QuantizeType::Int8,
             QuantizeType::Int4,
             QuantizeType::Rabitq,
+            QuantizeType::Pq,
         ];
         for qt in all {
             let numeric: u32 = qt.into();
@@ -568,6 +576,7 @@ mod tests {
     fn quantize_type_display() {
         assert_eq!(QuantizeType::Fp16.to_string(), "Fp16");
         assert_eq!(QuantizeType::Int4.to_string(), "Int4");
+        assert_eq!(QuantizeType::Pq.to_string(), "Pq");
     }
 
     // =========================================================================

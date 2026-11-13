@@ -349,6 +349,8 @@ pub const ZVEC_QUANTIZE_TYPE_INT8: zvec_quantize_type_t = 2;
 pub const ZVEC_QUANTIZE_TYPE_INT4: zvec_quantize_type_t = 3;
 /// RaBitQ quantization.
 pub const ZVEC_QUANTIZE_TYPE_RABITQ: zvec_quantize_type_t = 4;
+/// Product quantization (PQ), optionally with learned OPQ rotation.
+pub const ZVEC_QUANTIZE_TYPE_PQ: zvec_quantize_type_t = 8;
 
 // =============================================================================
 // Log Level Constants
@@ -460,6 +462,31 @@ pub struct zvec_mutable_byte_array_t {
 pub struct zvec_write_result_t {
     pub code: zvec_error_code_t,
     pub message: *const c_char,
+}
+
+/// Product quantization (PQ) configuration of an IVF index.
+///
+/// The C default initializer `ZVEC_PQ_QUANTIZER_PARAMS_DEFAULT` expands to
+/// `{8, 8, false, false, 5, 4}`.
+#[repr(C)]
+pub struct zvec_pq_quantizer_params_t {
+    pub num_chunk: c_int,
+    pub num_bits: c_int,
+    pub enable_rotate: bool,
+    pub fast_scan: bool,
+    pub opq_iter: u32,
+    pub opq_pq_iter: u32,
+}
+
+/// One group of grouped vector search results.
+///
+/// Every member is owned by the result array it came from: release the whole
+/// array with `zvec_group_results_free` and never free a member on its own.
+#[repr(C)]
+pub struct zvec_group_result_t {
+    pub group_by_value: *mut c_char,
+    pub docs: *mut *mut zvec_doc_t,
+    pub doc_count: usize,
 }
 
 /// Detailed error information including source location.
@@ -664,6 +691,14 @@ extern "C" {
     pub fn zvec_index_params_get_quantizer_enable_rotate(
         params: *const zvec_index_params_t,
     ) -> bool;
+    pub fn zvec_index_params_set_quantizer_pq(
+        params: *mut zvec_index_params_t,
+        pq: *const zvec_pq_quantizer_params_t,
+    ) -> zvec_error_code_t;
+    pub fn zvec_index_params_get_quantizer_pq(
+        params: *const zvec_index_params_t,
+        pq: *mut zvec_pq_quantizer_params_t,
+    ) -> zvec_error_code_t;
     pub fn zvec_index_params_set_hnsw_params(
         params: *mut zvec_index_params_t,
         m: c_int,
@@ -1087,6 +1122,13 @@ extern "C" {
         results: *mut *mut *mut zvec_doc_t,
         result_count: *mut usize,
     ) -> zvec_error_code_t;
+    pub fn zvec_collection_group_by_query(
+        collection: *const zvec_collection_t,
+        query: *const zvec_group_by_vector_query_t,
+        results: *mut *mut zvec_group_result_t,
+        result_count: *mut usize,
+    ) -> zvec_error_code_t;
+    pub fn zvec_group_results_free(results: *mut zvec_group_result_t, result_count: usize);
     pub fn zvec_collection_multi_query(
         collection: *const zvec_collection_t,
         query: *const zvec_multi_query_t,

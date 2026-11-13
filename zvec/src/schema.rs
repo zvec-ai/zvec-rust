@@ -3,6 +3,44 @@ use std::ffi::CStr;
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
 use crate::types::{DataType, IndexType, MetricType, QuantizeType};
 
+/// Product quantization (PQ) configuration of an IVF index.
+///
+/// PQ splits every vector into `num_chunk` sub-vectors and encodes each one
+/// with `num_bits` bits, trading a little recall for a much smaller index.
+/// Pair it with [`QuantizeType::Pq`] and [`IndexParams::set_quantizer_pq`].
+///
+/// [`Default`] reproduces the C initializer `ZVEC_PQ_QUANTIZER_PARAMS_DEFAULT`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PqQuantizerParams {
+    /// Number of sub-quantizers (chunks). The vector dimension must be
+    /// divisible by it, and it must be positive.
+    pub num_chunk: i32,
+    /// Bits per sub-quantizer code: `4` or `8`.
+    pub num_bits: i32,
+    /// Learn an OPQ rotation instead of quantizing the raw vectors. Both
+    /// iteration counts must then be non-zero.
+    pub enable_rotate: bool,
+    /// Use the FastScan SIMD layout. Requires `num_bits == 4`.
+    pub fast_scan: bool,
+    /// Outer OPQ iterations.
+    pub opq_iter: u32,
+    /// Inner PQ iterations performed per OPQ step.
+    pub opq_pq_iter: u32,
+}
+
+impl Default for PqQuantizerParams {
+    fn default() -> Self {
+        PqQuantizerParams {
+            num_chunk: 8,
+            num_bits: 8,
+            enable_rotate: false,
+            fast_scan: false,
+            opq_iter: 5,
+            opq_pq_iter: 4,
+        }
+    }
+}
+
 /// Parameters for configuring an index on a field.
 pub struct IndexParams {
     pub(crate) handle: *mut zvec_rust_sys::zvec_index_params_t,
@@ -312,16 +350,84 @@ impl IndexParams {
 
     /// Enables or disables random rotation before quantization.
     ///
-    /// Rotating vectors before `Int8` / `Int4` quantization reduces the
-    /// quantization error. The rotation matrix is stored with the index and
-    /// applied to query vectors at search time, so it has no effect with other
-    /// quantize types.
+    /// With `Int8` / `Int4` the vectors are randomly rotated before
+    /// quantization to reduce the quantization error; with `Pq` a learned OPQ
+    /// rotation is used instead. The rotation matrix is stored with the index
+    /// and applied to query vectors at search time, so it has no effect with
+    /// other quantize types.
+    ///
+    /// This is the same flag as [`PqQuantizerParams::enable_rotate`]:
+    /// [`IndexParams::set_quantizer_pq`] overwrites it, so call it after that
+    /// method to keep the value set here.
     ///
     /// Only vector index params accept this option; scalar indexes (`invert`,
     /// `fts`) return [`ErrorCode::InvalidArgument`].
     pub fn set_quantizer_enable_rotate(&mut self, enable_rotate: bool) -> Result<()> {
         check_error(unsafe {
             zvec_rust_sys::zvec_index_params_set_quantizer_enable_rotate(self.handle, enable_rotate)
+        })
+    }
+
+    /// Configures product quantization (PQ) for an IVF index.
+    ///
+    /// ```no_run
+    /// # use zvec_rust::*;
+    /// # fn f() -> Result<()> {
+    /// let mut params = IndexParams::ivf(MetricType::L2, 100, 10, false)?;
+    /// params.set_quantize_type(QuantizeType::Pq)?;
+    /// params.set_quantizer_pq(&PqQuantizerParams {
+    ///     num_chunk: 4,
+    ///     num_bits: 4,
+    ///     fast_scan: true,
+    ///     ..Default::default()
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// PQ supports FP32 IVF fields with the `L2`, `Ip` and `Cosine` metrics.
+    /// `num_bits` is `4` or `8`, `fast_scan` requires 4 bits, and the vector
+    /// dimension must be divisible by `num_chunk` — the schema is validated
+    /// when the collection is created.
+    ///
+    /// Only IVF index params accept PQ configuration; every other index type
+    /// returns [`ErrorCode::InvalidArgument`], as does an invalid combination
+    /// of fields.
+    pub fn set_quantizer_pq(&mut self, pq: &PqQuantizerParams) -> Result<()> {
+        let raw = zvec_rust_sys::zvec_pq_quantizer_params_t {
+            num_chunk: pq.num_chunk,
+            num_bits: pq.num_bits,
+            enable_rotate: pq.enable_rotate,
+            fast_scan: pq.fast_scan,
+            opq_iter: pq.opq_iter,
+            opq_pq_iter: pq.opq_pq_iter,
+        };
+        check_error(unsafe { zvec_rust_sys::zvec_index_params_set_quantizer_pq(self.handle, &raw) })
+    }
+
+    /// Returns the product quantization (PQ) configuration of an IVF index.
+    ///
+    /// Only IVF index params carry PQ configuration; every other index type
+    /// returns [`ErrorCode::InvalidArgument`].
+    pub fn quantizer_pq(&self) -> Result<PqQuantizerParams> {
+        let mut raw = zvec_rust_sys::zvec_pq_quantizer_params_t {
+            num_chunk: 0,
+            num_bits: 0,
+            enable_rotate: false,
+            fast_scan: false,
+            opq_iter: 0,
+            opq_pq_iter: 0,
+        };
+        check_error(unsafe {
+            zvec_rust_sys::zvec_index_params_get_quantizer_pq(self.handle, &mut raw)
+        })?;
+        Ok(PqQuantizerParams {
+            num_chunk: raw.num_chunk,
+            num_bits: raw.num_bits,
+            enable_rotate: raw.enable_rotate,
+            fast_scan: raw.fast_scan,
+            opq_iter: raw.opq_iter,
+            opq_pq_iter: raw.opq_pq_iter,
         })
     }
 }
@@ -864,6 +970,97 @@ mod tests {
         let err = params
             .set_quantizer_enable_rotate(true)
             .expect_err("scalar index params must reject the quantizer option");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+    }
+
+    #[test]
+    fn test_pq_quantizer_params_default_matches_c_macro() {
+        // ZVEC_PQ_QUANTIZER_PARAMS_DEFAULT = {8, 8, false, false, 5, 4}
+        assert_eq!(
+            PqQuantizerParams::default(),
+            PqQuantizerParams {
+                num_chunk: 8,
+                num_bits: 8,
+                enable_rotate: false,
+                fast_scan: false,
+                opq_iter: 5,
+                opq_pq_iter: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn test_index_params_quantizer_pq_roundtrip() {
+        let mut params = IndexParams::ivf(MetricType::L2, 100, 10, false).unwrap();
+        params.set_quantize_type(QuantizeType::Pq).unwrap();
+        let pq = PqQuantizerParams {
+            num_chunk: 4,
+            num_bits: 4,
+            enable_rotate: true,
+            fast_scan: true,
+            opq_iter: 3,
+            opq_pq_iter: 2,
+        };
+        params.set_quantizer_pq(&pq).unwrap();
+
+        assert_eq!(params.quantize_type(), QuantizeType::Pq);
+        assert_eq!(params.quantizer_pq().unwrap(), pq);
+    }
+
+    #[test]
+    fn test_index_params_quantizer_pq_rejects_invalid_combinations() {
+        let mut params = IndexParams::ivf(MetricType::L2, 100, 10, false).unwrap();
+
+        // FastScan is a 4-bit SIMD layout.
+        let err = params
+            .set_quantizer_pq(&PqQuantizerParams {
+                num_bits: 8,
+                fast_scan: true,
+                ..Default::default()
+            })
+            .expect_err("fast_scan must require 4-bit codes");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+        // num_bits is 4 or 8.
+        let err = params
+            .set_quantizer_pq(&PqQuantizerParams {
+                num_bits: 3,
+                ..Default::default()
+            })
+            .expect_err("num_bits must be 4 or 8");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+        // num_chunk must be positive.
+        let err = params
+            .set_quantizer_pq(&PqQuantizerParams {
+                num_chunk: 0,
+                ..Default::default()
+            })
+            .expect_err("num_chunk must be positive");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+        // OPQ needs positive iteration counts.
+        let err = params
+            .set_quantizer_pq(&PqQuantizerParams {
+                enable_rotate: true,
+                opq_iter: 0,
+                ..Default::default()
+            })
+            .expect_err("enable_rotate must require positive OPQ iterations");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+    }
+
+    #[test]
+    fn test_index_params_quantizer_pq_rejects_non_ivf_index() {
+        let mut params = IndexParams::hnsw(MetricType::L2, 16, 200).unwrap();
+        let err = params
+            .set_quantizer_pq(&PqQuantizerParams::default())
+            .expect_err("PQ configuration is IVF-only");
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+
+        let err = params
+            .quantizer_pq()
+            .expect_err("PQ configuration is IVF-only");
         assert_eq!(err.code, ErrorCode::InvalidArgument);
     }
 

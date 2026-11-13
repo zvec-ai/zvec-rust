@@ -17,6 +17,7 @@
 - **尽可能零拷贝** — 最小化 FFI 边界的数据拷贝
 - **预编译库支持** — 自动从 GitHub Releases 下载预编译的 `libzvec_c_api`；高阶用户可通过 `ZVEC_LIB_DIR` 覆盖
 - **FTS jieba 开箱即用** — `libzvec_c_api` 内嵌 cppjieba 默认词表与 HMM 模型（LZ4 压缩），`jieba` 分词器不再依赖磁盘上的词表文件，也无需注册步骤
+- **分组向量检索** — `collection.group_by_query(&query)` 按标量字段的每个取值分别返回最佳匹配，避免单一类别占满整个结果页
 
 ## 支持的平台
 
@@ -40,9 +41,10 @@
 
 > 动态库文件名因平台而异：`libzvec_c_api.dylib`（macOS）、`libzvec_c_api.so`（Linux）、`zvec_c_api.dll`（Windows）。
 
-> Windows ARM64 预编译产物不含 RaBitQ 与 DiskANN：上游 zvec 将 RaBitQ 限定在
-> x86_64（其内核为 AVX2/AVX-512），Windows 的 DiskANN 后端同样只支持 x86_64，
-> 因此该目标上这两类索引不可用。
+> Windows ARM64 预编译产物不含 RaBitQ：自 zvec v0.8.1 起，上游在 Linux、macOS、
+> Android、iOS 的 ARM64（NEON）以及 Linux、macOS、Windows 的 x86-64（运行时
+> AVX2/AVX-512 分发）上构建 RaBitQ，但不包含 Windows ARM64，因此该目标上这类
+> 索引不可用。DiskANN 在上表所有预编译目标上均可用。
 
 ## 架构
 
@@ -66,7 +68,7 @@ Rust SDK 依赖 zvec C 库（`libzvec_c_api`）。可通过以下任一方式提
 
 ```toml
 [dependencies]
-zvec-rust = "0.8.0"
+zvec-rust = "0.8.1"
 ```
 
 `cargo run` / `cargo test` 可开箱即用，因为 Cargo 会把解析出的库目录传给链接器。
@@ -77,10 +79,10 @@ zvec-rust = "0.8.0"
 
 ```toml
 [dependencies]
-zvec-rust = "0.8.0"
+zvec-rust = "0.8.1"
 
 [build-dependencies]
-zvec-rust-build = "0.8.0"
+zvec-rust-build = "0.8.1"
 ```
 
 ```rust
@@ -221,6 +223,7 @@ fn main() -> zvec_rust::Result<()> {
 | `basic` | 端到端流程：schema → 插入 → 查询 → 获取 → 删除 |
 | `schema_builder` | 各种 Schema 配置：字段类型、索引类型、量化 |
 | `vector_search` | 向量查询模式：简单查询、Builder、过滤器、输出字段、HNSW 参数 |
+| `group_by_search` | 分组向量检索：按类别取最佳匹配、过滤器，以及与扁平 top-k 的对比 |
 | `crud_operations` | 完整 CRUD：插入、获取、更新、upsert、删除、统计、刷新 |
 | `config_logging` | 库配置：内存限制、线程数、日志 |
 
@@ -303,6 +306,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.delete(&pks)` | 按主键删除 |
 | `collection.delete_by_filter(filter)` | 按过滤表达式批量删除 |
 | `collection.query(&query)` | 标量过滤、全文搜索或向量相似度搜索 |
+| `collection.group_by_query(&query)` | 按标量字段分组的向量检索（每组取最佳匹配） |
 | `collection.multi_query(&query)` | 多路检索 + RRF / 加权重排 |
 | `collection.fetch(&pks)` | 按主键获取 |
 | `collection.fetch_with_options(&pks, fields, include_vector)` | 按主键获取并控制输出字段 |
@@ -373,6 +377,30 @@ Builder 会根据已设置的字段推断查询类型：设置 `vector(..)` 构�
 两者都不设置则构建标量查询。纯关键词查询也可以直接用
 `SearchQuery::fts(field, fts, topk)` 构造。
 
+### 分组检索
+
+`GroupBySearchQuery` 按某个标量字段分组执行向量检索：返回的不是一个扁平的 top-k 列表，
+而是该字段每个取值下的最佳匹配。
+
+```rust
+// 最多 3 个类别，每个类别取最佳的 2 条
+let mut query = GroupBySearchQuery::new("embedding", "category", &query_vec, 3, 2)?;
+query.set_output_fields(&["title", "price"])?;
+query.set_filter("price <= 100.0")?;   // 分组前生效
+query.set_include_vector(true)?;       // 同时返回向量
+
+for group in collection.group_by_query(&query)? {
+    println!("{}: {} 条命中", group.group_by_value, group.docs.len());
+    for doc in &group.docs {
+        println!("  {} 得分 {:.4}", doc.get_pk().unwrap_or(""), doc.get_score());
+    }
+}
+```
+
+分组按组内最佳匹配排序返回，每组最多 `group_topk` 条文档并按相似度排序。被过滤器清空的组
+会被直接丢弃，而不是返回一个空组；没有任何命中时返回空 `Vec` 而不是错误。文档所有权归
+Rust，因此查询对象乃至集合被 drop 之后，分组结果依然可用。
+
 ### 多路检索（混合搜索）
 
 `MultiQuery` 可以组合多个子查询（稠密向量、稀疏向量或全文检索），并使用 RRF 或加权策略重排：
@@ -422,14 +450,34 @@ mq.set_rerank_weighted(&[0.7, 0.3])?;  // 每个子查询的权重
 | HNSW | `IndexParams::hnsw(metric, m, ef)` | 图索引（推荐） |
 | HNSW+量化 | `IndexParams::hnsw_with_quantize(...)` | 带量化的 HNSW |
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | 倒排文件索引 |
+| IVF PQ | `IndexParams::ivf(...)` + `set_quantize_type(Pq)` + `set_quantizer_pq(&pq)` | 使用 PQ4/PQ8 乘积量化压缩的 IVF 索引，可选学习式 OPQ |
 | IVF RaBitQ | `IndexParams::ivf_rabitq(metric, nlist, total_bits, sample_count)` | 带 RaBitQ 量化的 IVF 索引 |
 | Flat | `IndexParams::flat(metric)` | 暴力搜索索引 |
-| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | 基于磁盘的图索引，适合大规模数据集（Linux x86_64/ARM64、macOS ARM64、Windows x86_64、64 位 Android/iOS） |
+| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | 基于磁盘的图索引，适合大规模数据集（Linux x86_64/ARM64、macOS x86_64/ARM64、Windows x86_64/ARM64、64 位 Android/iOS） |
 | Invert | `IndexParams::invert(range, wildcard)` | 标量字段索引 |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | 全文检索索引 |
 
 使用 `Int8` / `Int4` 量化时，`params.set_quantizer_enable_rotate(true)` 会在量化前对向量做随机旋转，
-以降低量化误差。旋转矩阵随索引一起保存，并在检索时自动作用于查询向量。
+以降低量化误差；使用 `Pq` 时，同一开关改为启用学习式 OPQ 旋转。旋转矩阵随索引一起保存，
+并在检索时自动作用于查询向量。
+
+IVF 索引还可以用乘积量化（PQ）压缩：先把量化类型设为 `QuantizeType::Pq`，再用
+`PqQuantizerParams` 描述编码布局：
+
+```rust
+let mut params = IndexParams::ivf(MetricType::L2, 100, 10, false)?;
+params.set_quantize_type(QuantizeType::Pq)?;
+params.set_quantizer_pq(&PqQuantizerParams {
+    num_chunk: 16,        // 向量维度必须能被它整除
+    num_bits: 8,          // 每个子量化器 4 或 8 bit
+    fast_scan: false,     // SIMD 布局，要求 num_bits == 4
+    enable_rotate: true,  // 使用学习式 OPQ 而非普通 PQ
+    ..Default::default()  // opq_iter: 5, opq_pq_iter: 4
+})?;
+```
+
+PQ 支持使用 `L2`、`Ip`、`Cosine` 度量的 FP32 IVF 字段；创建集合时会校验向量维度与
+`num_chunk` 是否匹配。
 
 ## 测试
 

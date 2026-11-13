@@ -148,6 +148,29 @@ fn main() -> zvec_rust::Result<()> {
 
     println!("Schema created with FP32, FP16, and INT8 vector types");
 
+    // Example 9: IVF index with product quantization (PQ)
+    println!("\n=== Example 9: IVF Product Quantization ===");
+    let mut pq_params = IndexParams::ivf(MetricType::L2, 100, 10, false)?;
+    pq_params.set_quantize_type(QuantizeType::Pq)?;
+    pq_params.set_quantizer_pq(&PqQuantizerParams {
+        num_chunk: 16,
+        num_bits: 8,
+        ..Default::default()
+    })?;
+
+    let pq = pq_params.quantizer_pq()?;
+    println!(
+        "PQ configured: {} chunk(s) x {} bit(s), fast_scan={}, OPQ={} ({} outer, {} inner iterations)",
+        pq.num_chunk, pq.num_bits, pq.fast_scan, pq.enable_rotate, pq.opq_iter, pq.opq_pq_iter
+    );
+
+    let _pq_schema = CollectionSchema::builder("pq_collection")
+        .add_field(FieldSchema::new("id", DataType::String, false, 0)?)
+        .add_vector_field("embedding", DataType::VectorFp32, 128, pq_params)
+        .build()?;
+
+    println!("Schema created with an IVF index compressed to 16 x 8-bit PQ codes");
+
     // Clean up
     shutdown()?;
 

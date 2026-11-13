@@ -12,7 +12,7 @@ categories = ["database", "api-bindings"]
 links = "zvec_rust"
 
 [dependencies]
-zvec-rust-sys = { path = "../zvec-sys", version = "0.8.0" }
+zvec-rust-sys = { path = "../zvec-sys", version = "0.8.1" }
 
 [features]
 default = ["bundled"]
@@ -45,6 +45,10 @@ path = "examples/crud_operations.rs"
 [[example]]
 name = "config_logging"
 path = "examples/config_logging.rs"
+
+[[example]]
+name = "group_by_search"
+path = "examples/group_by_search.rs"
 
 [[bench]]
 name = "zvec_bench"
