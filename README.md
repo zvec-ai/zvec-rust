@@ -70,7 +70,7 @@ Add `zvec-rust` to your `Cargo.toml`. The default `bundled` feature automaticall
 
 ```toml
 [dependencies]
-zvec-rust = "0.8.0"
+zvec-rust = "0.8.1"
 ```
 
 `cargo run` / `cargo test` work out of the box because Cargo passes the
@@ -83,10 +83,10 @@ the executable:
 
 ```toml
 [dependencies]
-zvec-rust = "0.8.0"
+zvec-rust = "0.8.1"
 
 [build-dependencies]
-zvec-rust-build = "0.8.0"
+zvec-rust-build = "0.8.1"
 ```
 
 ```rust
