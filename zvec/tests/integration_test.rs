@@ -1396,10 +1396,10 @@ fn test_diskann_collection_end_to_end() {
 
     let collection = match Collection::create_and_open(dir.to_str().unwrap(), &schema, None) {
         Ok(c) => c,
-        // DiskANN is unavailable on some platforms (upstream supports Linux
-        // x86_64/ARM64, macOS ARM64, Windows x86_64 and 64-bit Android/iOS).
-        // Where it is missing the engine reports NotSupported; skip the
-        // end-to-end flow gracefully.
+        // Since zvec v0.8.1 DiskANN is built for Linux, macOS and Windows on
+        // both x86_64 and ARM64, plus 64-bit Android/iOS — every target this
+        // SDK ships a prebuilt for. Keep the skip as a safety net: anywhere
+        // else the engine reports NotSupported.
         Err(e) if e.code == ErrorCode::NotSupported => {
             eprintln!("skipping diskann end-to-end test: {}", e.message);
             return;
@@ -1607,8 +1607,10 @@ fn test_ivf_rabitq_collection_end_to_end() {
 
     let collection = match Collection::create_and_open(dir.to_str().unwrap(), &schema, None) {
         Ok(c) => c,
-        // RaBitQ is only supported on Linux x86_64. On other platforms the
-        // engine reports NotSupported; skip the end-to-end flow gracefully.
+        // Since zvec v0.8.1 RaBitQ is built for ARM64 (NEON) on Linux, macOS,
+        // Android and iOS, and for x86-64 on Linux, macOS and Windows; only
+        // Windows ARM64 is still left out. Where it is missing the engine
+        // reports NotSupported; skip the end-to-end flow gracefully.
         Err(e) if e.code == ErrorCode::NotSupported => {
             eprintln!("skipping ivf rabitq end-to-end test: {}", e.message);
             return;

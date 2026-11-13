@@ -46,6 +46,10 @@ path = "examples/crud_operations.rs"
 name = "config_logging"
 path = "examples/config_logging.rs"
 
+[[example]]
+name = "group_by_search"
+path = "examples/group_by_search.rs"
+
 [[bench]]
 name = "zvec_bench"
 harness = false

@@ -1,11 +1,12 @@
 use std::ffi::CStr;
+use std::fmt;
 use std::marker::PhantomData;
 use std::ptr;
 
 use crate::doc::Doc;
 use crate::error::{check_error, to_cstring, Error, ErrorCode, Result};
 use crate::multi_query::MultiQuery;
-use crate::query::SearchQuery;
+use crate::query::{GroupBySearchQuery, SearchQuery};
 use crate::schema::{CollectionSchema, FieldSchema, IndexParams};
 
 /// Options for creating or opening a collection.
@@ -106,6 +107,28 @@ pub struct WriteResult {
     pub success_count: u64,
     pub error_count: u64,
     pub results: Vec<DocWriteResult>,
+}
+
+/// One group of grouped vector search results.
+///
+/// Returned by [`Collection::group_by_query`].
+pub struct SearchGroup {
+    /// String representation of the grouping value, as the engine renders it.
+    pub group_by_value: String,
+    /// Documents in this group, ordered by vector similarity.
+    pub docs: Vec<Doc>,
+}
+
+impl fmt::Debug for SearchGroup {
+    // Prints the grouping value and how many documents it matched. Hand-written
+    // because `Doc` has no `Debug` implementation; the documents themselves are
+    // reachable through `SearchGroup::docs`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SearchGroup")
+            .field("group_by_value", &self.group_by_value)
+            .field("doc_count", &self.docs.len())
+            .finish()
+    }
 }
 
 /// A zvec collection for storing and querying vector data.
@@ -333,6 +356,44 @@ impl Collection {
 
         let docs = unsafe { collect_docs(results, result_count) };
         Ok(docs)
+    }
+
+    /// Performs a vector similarity search grouped by a scalar field.
+    ///
+    /// The results come back as one [`SearchGroup`] per distinct value of the
+    /// grouping field, each holding at most `group_topk` documents ordered by
+    /// similarity. At most `group_count` groups are returned, starting with the
+    /// group containing the best match.
+    ///
+    /// A query that matches nothing returns an empty vector rather than an
+    /// error. The groups stay valid after the query — and after the collection
+    /// — is dropped.
+    ///
+    /// ```no_run
+    /// # use zvec_rust::*;
+    /// # fn f(collection: &Collection) -> Result<()> {
+    /// let query = GroupBySearchQuery::new("embedding", "category", &[0.1, 0.2], 3, 5)?;
+    /// for group in collection.group_by_query(&query)? {
+    ///     println!("{} matched {} doc(s)", group.group_by_value, group.docs.len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn group_by_query(&self, query: &GroupBySearchQuery) -> Result<Vec<SearchGroup>> {
+        let mut results: *mut zvec_rust_sys::zvec_group_result_t = ptr::null_mut();
+        let mut result_count: usize = 0;
+
+        check_error(unsafe {
+            zvec_rust_sys::zvec_collection_group_by_query(
+                self.handle,
+                query.handle,
+                &mut results,
+                &mut result_count,
+            )
+        })?;
+
+        let groups = unsafe { collect_group_results(results, result_count) };
+        Ok(groups)
     }
 
     /// Performs a multi-query that combines several sub-queries with a rerank
@@ -806,6 +867,67 @@ unsafe fn collect_docs(results: *mut *mut zvec_rust_sys::zvec_doc_t, count: usiz
     docs
 }
 
+/// Collects grouped results from a C array into a `Vec<SearchGroup>`.
+///
+/// The C API releases a `zvec_group_result_t` array only as a whole, through
+/// `zvec_group_results_free`, and that array owns everything inside it: the
+/// grouping values, each group's document pointer array, and the documents
+/// themselves. Every document is therefore moved into an owning [`Doc`], its
+/// pointer array is released here, and the group is handed back as an empty
+/// shell — so `zvec_group_results_free` is left with only the grouping strings
+/// and the outer array to free, and cannot destroy a document twice.
+///
+/// # Safety
+/// `results` must be null, or a `count`-element array returned by
+/// `zvec_collection_group_by_query` that has not been freed yet.
+unsafe fn collect_group_results(
+    results: *mut zvec_rust_sys::zvec_group_result_t,
+    count: usize,
+) -> Vec<SearchGroup> {
+    if results.is_null() {
+        return Vec::new();
+    }
+
+    let mut groups = Vec::with_capacity(count);
+    for i in 0..count {
+        let group = &mut *results.add(i);
+
+        let group_by_value = if group.group_by_value.is_null() {
+            String::new()
+        } else {
+            CStr::from_ptr(group.group_by_value)
+                .to_string_lossy()
+                .into_owned()
+        };
+
+        let mut docs = Vec::with_capacity(group.doc_count);
+        if !group.docs.is_null() {
+            for j in 0..group.doc_count {
+                let doc_ptr = *group.docs.add(j);
+                if !doc_ptr.is_null() {
+                    // Take ownership: Rust will call zvec_doc_destroy on drop.
+                    docs.push(Doc::from_raw(doc_ptr));
+                }
+            }
+            // Free the pointer array only; the documents it listed are owned by
+            // the Doc wrappers above now.
+            zvec_rust_sys::zvec_free(group.docs as *mut std::os::raw::c_void);
+            group.docs = ptr::null_mut();
+            group.doc_count = 0;
+        }
+
+        groups.push(SearchGroup {
+            group_by_value,
+            docs,
+        });
+    }
+
+    // Releases every group_by_value string and the result array itself.
+    zvec_rust_sys::zvec_group_results_free(results, count);
+
+    groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,6 +936,20 @@ mod tests {
     fn collect_docs_handles_null_pointer() {
         let docs = unsafe { collect_docs(ptr::null_mut(), 0) };
         assert!(docs.is_empty());
+    }
+
+    #[test]
+    fn collect_group_results_handles_null_pointer() {
+        let groups = unsafe { collect_group_results(ptr::null_mut(), 0) };
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn collect_group_results_null_array_wins_over_a_nonzero_count() {
+        // The engine reports "no groups" as a null array and can leave a stale
+        // count next to it; the null must win instead of being dereferenced.
+        let groups = unsafe { collect_group_results(ptr::null_mut(), 99) };
+        assert!(groups.is_empty());
     }
 
     #[test]

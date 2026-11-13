@@ -17,6 +17,7 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 - **Zero-Copy Where Possible** — Minimizes data copying across the FFI boundary
 - **Prebuilt Libraries** — Automatically downloads prebuilt `libzvec_c_api` from GitHub Releases; advanced users can override with `ZVEC_LIB_DIR`
 - **FTS with jieba Out of the Box** — `libzvec_c_api` embeds cppjieba's default dictionary and HMM model (LZ4-compressed), so the `jieba` FTS tokenizer needs no dictionary files on disk and no registration step
+- **Grouped Vector Search** — `collection.group_by_query(&query)` returns the best matches per distinct value of a scalar field, so one dense category cannot sweep the whole result page
 
 ## Supported Platforms
 
@@ -41,10 +42,11 @@ Safe, idiomatic Rust bindings for the [zvec](https://github.com/alibaba/zvec) ve
 
 > The dynamic library name varies by platform: `libzvec_c_api.dylib` (macOS), `libzvec_c_api.so` (Linux), `zvec_c_api.dll` (Windows).
 
-> The Windows ARM64 prebuilt ships without RaBitQ and DiskANN: upstream zvec
-> gates RaBitQ on x86_64 (its kernels are AVX2/AVX-512) and its Windows
-> DiskANN backend on x86_64 too, so those index types are unavailable on that
-> target.
+> The Windows ARM64 prebuilt ships without RaBitQ: since zvec v0.8.1 upstream
+> builds RaBitQ for ARM64 (NEON) on Linux, macOS, Android and iOS and for
+> x86-64 (runtime AVX2/AVX-512 dispatch) on Linux, macOS and Windows, but not
+> for Windows ARM64, so that index type is unavailable on that target. DiskANN
+> is built for every prebuilt target listed above.
 
 ## Architecture
 
@@ -229,6 +231,7 @@ Run any example with `cargo run --example <name>`:
 | `basic` | End-to-end workflow: schema → insert → query → fetch → delete |
 | `schema_builder` | Various schema configurations: field types, index types, quantization |
 | `vector_search` | Vector query patterns: simple, builder, filter, output fields, HNSW params |
+| `group_by_search` | Grouped vector search: best matches per category, filters, and a flat top-k comparison |
 | `crud_operations` | Full CRUD: insert, fetch, update, upsert, delete, stats, flush |
 | `config_logging` | Library configuration: memory limits, thread counts, logging |
 
@@ -313,6 +316,7 @@ let schema = CollectionSchema::builder("name")
 | `collection.delete(&pks)` | Delete by primary keys |
 | `collection.delete_by_filter(filter)` | Delete documents matching a filter expression |
 | `collection.query(&query)` | Scalar filtering, full-text, or vector similarity search |
+| `collection.group_by_query(&query)` | Vector search grouped by a scalar field (best matches per group) |
 | `collection.multi_query(&query)` | Multi-route search with RRF / weighted rerank |
 | `collection.fetch(&pks)` | Fetch by primary keys |
 | `collection.fetch_with_options(&pks, fields, include_vector)` | Fetch with output-field control |
@@ -385,6 +389,31 @@ vector query (adding an FTS clause makes it a hybrid search), an FTS clause
 without a vector builds a keyword-only query, and neither builds a scalar query.
 `SearchQuery::fts(field, fts, topk)` is the direct keyword-only constructor.
 
+### Grouped Search
+
+`GroupBySearchQuery` runs a vector search grouped by a scalar field: instead of one flat top-k
+list it returns the best matches for every distinct value of that field.
+
+```rust
+// The 2 best matches in each of up to 3 categories
+let mut query = GroupBySearchQuery::new("embedding", "category", &query_vec, 3, 2)?;
+query.set_output_fields(&["title", "price"])?;
+query.set_filter("price <= 100.0")?;   // applied before grouping
+query.set_include_vector(true)?;       // return the vectors as well
+
+for group in collection.group_by_query(&query)? {
+    println!("{}: {} hit(s)", group.group_by_value, group.docs.len());
+    for doc in &group.docs {
+        println!("  {} scored {:.4}", doc.get_pk().unwrap_or(""), doc.get_score());
+    }
+}
+```
+
+Groups come back ordered by their best match, each holding at most `group_topk` documents in
+similarity order. A group the filter empties out is dropped rather than returned empty, and a
+query that matches nothing returns an empty `Vec` instead of an error. The documents are owned
+by Rust, so the groups stay usable after the query — and the collection — are dropped.
+
 ### Multi-Query (Hybrid Search)
 
 `MultiQuery` combines multiple sub-queries (dense vector, sparse vector, or FTS) with RRF or weighted reranking:
@@ -434,15 +463,35 @@ Available distance metrics: `L2`, `Ip`, `Cosine`, `MipsL2`.
 | HNSW | `IndexParams::hnsw(metric, m, ef)` | Graph index (recommended) |
 | HNSW+Q | `IndexParams::hnsw_with_quantize(...)` | HNSW with quantization |
 | IVF | `IndexParams::ivf(metric, nlist, niters, soar)` | Inverted file index |
+| IVF PQ | `IndexParams::ivf(...)` + `set_quantize_type(Pq)` + `set_quantizer_pq(&pq)` | IVF compressed with PQ4/PQ8 product quantization, optionally learned OPQ |
 | IVF RaBitQ | `IndexParams::ivf_rabitq(metric, nlist, total_bits, sample_count)` | IVF with RaBitQ quantization |
 | Flat | `IndexParams::flat(metric)` | Brute-force index |
-| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | Disk-based graph index for large datasets (Linux x86_64/ARM64, macOS ARM64, Windows x86_64, 64-bit Android/iOS) |
+| DiskANN | `IndexParams::diskann(metric, max_degree, list_size, pq_chunk_num)` | Disk-based graph index for large datasets (Linux x86_64/ARM64, macOS x86_64/ARM64, Windows x86_64/ARM64, 64-bit Android/iOS) |
 | Invert | `IndexParams::invert(range, wildcard)` | Scalar field index |
 | FTS | `IndexParams::fts(tokenizer, filters, extra)` | Full-text search index |
 
 With `Int8` / `Int4` quantization, `params.set_quantizer_enable_rotate(true)` randomly rotates
-vectors before quantization to reduce the quantization error. The rotation matrix is stored with
-the index and applied to query vectors at search time.
+vectors before quantization to reduce the quantization error; with `Pq` the same flag selects a
+learned OPQ rotation instead. The rotation matrix is stored with the index and applied to query
+vectors at search time.
+
+An IVF index can also be compressed with product quantization. Set the quantize type to
+`QuantizeType::Pq`, then describe the layout with `PqQuantizerParams`:
+
+```rust
+let mut params = IndexParams::ivf(MetricType::L2, 100, 10, false)?;
+params.set_quantize_type(QuantizeType::Pq)?;
+params.set_quantizer_pq(&PqQuantizerParams {
+    num_chunk: 16,        // the vector dimension must be divisible by it
+    num_bits: 8,          // 4 or 8 bits per sub-quantizer code
+    fast_scan: false,     // SIMD layout, requires num_bits == 4
+    enable_rotate: true,  // learned OPQ instead of plain PQ
+    ..Default::default()  // opq_iter: 5, opq_pq_iter: 4
+})?;
+```
+
+PQ supports FP32 IVF fields with the `L2`, `Ip` and `Cosine` metrics; the dimension is checked
+against `num_chunk` when the collection is created.
 
 ## Testing
 
