@@ -25,6 +25,12 @@ This crate requires the zvec C library (`libzvec_c_api`) to be available at link
 3. **Vendor directory**: `vendor/lib`
 4. **Auto-build** (experimental): Clones and builds zvec from source
 
+Set `ZVEC_STRICT_LIB=1` to accept step 1 only: the library must then come from a
+`ZVEC_LIB_DIR` that contains the platform library, and the build script fails
+with the expected file name instead of falling back to steps 2–4, a cached or
+downloaded prebuilt SDK, or a source build. See the
+[main README](../README.md) for details.
+
 See the [main README](../README.md) for detailed setup instructions.
 
 ## Usage
