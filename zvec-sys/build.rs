@@ -1,7 +1,8 @@
 use std::env;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 /// GitHub repository for downloading prebuilt libraries.
 const PREBUILT_REPO: &str = "zvec-ai/zvec-rust";
@@ -634,10 +635,20 @@ fn try_download_powershell(url: &str, dest: &Path) -> bool {
         url.replace('\'', "''"),
         dest.to_string_lossy().replace('\'', "''")
     );
-    command_succeeded(
-        Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]),
-        "PowerShell download",
-    )
+    run_powershell(&script, "PowerShell download")
+}
+
+/// Runs `script` with PowerShell 7 (`pwsh`). Windows PowerShell 5.1 is used
+/// only when `pwsh` is not installed: some Windows hosts ship just one of the
+/// two, for example Nano Server images have no Windows PowerShell.
+fn run_powershell(script: &str, action: &str) -> bool {
+    let args = ["-NoProfile", "-NonInteractive", "-Command", script];
+    match Command::new("pwsh").args(args).output() {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            command_succeeded(Command::new("powershell").args(args), action)
+        }
+        output => output_succeeded(output, action),
+    }
 }
 
 fn extract_tarball(tar_path: &Path, dest_dir: &Path) -> bool {
@@ -653,7 +664,7 @@ fn extract_tarball(tar_path: &Path, dest_dir: &Path) -> bool {
         return true;
     }
 
-    // Fallback: try powershell on Windows, propagating tar's exit code.
+    // Fallback: try PowerShell on Windows, propagating tar's exit code.
     if cfg!(windows) {
         let script = format!(
             "$ErrorActionPreference = 'Stop'; \
@@ -661,16 +672,17 @@ fn extract_tarball(tar_path: &Path, dest_dir: &Path) -> bool {
             tar_path.to_string_lossy().replace('\'', "''"),
             dest_dir.to_string_lossy().replace('\'', "''")
         );
-        return command_succeeded(
-            Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]),
-            "PowerShell tar extraction",
-        );
+        return run_powershell(&script, "PowerShell tar extraction");
     }
     false
 }
 
 fn command_succeeded(command: &mut Command, action: &str) -> bool {
-    match command.output() {
+    output_succeeded(command.output(), action)
+}
+
+fn output_succeeded(output: io::Result<Output>, action: &str) -> bool {
+    match output {
         Ok(output) if output.status.success() => true,
         Ok(output) => {
             println!("cargo:warning={action} failed: {}", output.status);

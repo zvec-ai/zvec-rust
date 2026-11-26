@@ -553,5 +553,51 @@ mod build_script {
             main();
             assert!(fixture.log().is_empty());
         }
+
+        fn powershell_hosts(fixture: &Fixture, pwsh_exit: Option<i32>) {
+            if let Some(code) = pwsh_exit {
+                fixture.tool(
+                    "pwsh",
+                    &format!("printf 'pwsh\\n' >> \"$ZVEC_TEST_LOG\"\nexit {code}"),
+                );
+            }
+            fixture.tool("powershell", "printf 'powershell\\n' >> \"$ZVEC_TEST_LOG\"");
+        }
+
+        #[test]
+        fn powershell_fallback_prefers_pwsh() {
+            let fixture = Fixture::new();
+            powershell_hosts(&fixture, Some(0));
+            let dest = fixture.root.join("sdk.tar.gz");
+            assert!(try_download_powershell(
+                "https://mirror.invalid/sdk.tar.gz",
+                &dest
+            ));
+            assert_eq!(fixture.log(), "pwsh\n");
+        }
+
+        #[test]
+        fn powershell_fallback_keeps_pwsh_failure() {
+            let fixture = Fixture::new();
+            powershell_hosts(&fixture, Some(1));
+            let dest = fixture.root.join("sdk.tar.gz");
+            assert!(!try_download_powershell(
+                "https://mirror.invalid/sdk.tar.gz",
+                &dest
+            ));
+            assert_eq!(fixture.log(), "pwsh\n");
+        }
+
+        #[test]
+        fn powershell_fallback_uses_windows_powershell_without_pwsh() {
+            let fixture = Fixture::new();
+            powershell_hosts(&fixture, None);
+            let dest = fixture.root.join("sdk.tar.gz");
+            assert!(try_download_powershell(
+                "https://mirror.invalid/sdk.tar.gz",
+                &dest
+            ));
+            assert_eq!(fixture.log(), "powershell\n");
+        }
     }
 }
